@@ -2,7 +2,6 @@ import {HardhatUserConfig} from "hardhat/types";
 import accounts from "./test/Accounts"
 import dotenv from 'dotenv';
 
-import "@nomiclabs/hardhat-solhint";
 import "@nomiclabs/hardhat-ethers"
 
 import "solidity-coverage";
