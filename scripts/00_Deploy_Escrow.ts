@@ -6,6 +6,6 @@ const deployFunc: DeployFunction = async function (hre: HardhatRuntimeEnvironmen
   const {deploy} = deployments;
   const {deployer} = await getNamedAccounts();
 
-  await deploy("Greeter", {from: deployer, args: ["Greeter"]});
+  await deploy("Escrow", {from: deployer});
 }
 export default deployFunc;
