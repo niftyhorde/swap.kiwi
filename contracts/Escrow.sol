@@ -12,6 +12,7 @@ import "./RevertMsg.sol";
 
 contract Escrow is Ownable, RevertMsg {
 
+  uint256 private _swapId;
   uint256 public fee;
   mapping (address => uint256) private _balances;
   mapping (uint256 => Swap) private _swaps;
@@ -31,10 +32,11 @@ contract Escrow is Ownable, RevertMsg {
     fee = newFee;
   }
 
-  function depositNft(uint256 swapId, address secondUser, address nftAddress, uint256 nftId) public {
-    safeTransferFrom(msg.sender, address(this), nftId);
+  function depositNft(address secondUser, address nftAddress, uint256 nftId) public returns(uint256){
+    safeTransferFrom(nftAddress, address(this), nftAddress, nftId);
+    _swapId += 1;
 
-    Swap storage swap = _swaps[swapId];
+    Swap storage swap = _swaps[_swapId];
     if(swap.initiator == address(0)){
       swap.initiator = msg.sender;
       swap.initiatorNftAddress = nftAddress;
@@ -49,24 +51,55 @@ contract Escrow is Ownable, RevertMsg {
     if (success != true) {
         revert(_getRevertMsg(data));
     }
+    return _swapId;
   }
 
   function acceptSwap(uint256 swapId) public {
-    safeTransferFrom(address(this), _swaps[swapId].initiator, _swaps[swapId].secondUserNftId);
-    safeTransferFrom(address(this), _swaps[swapId].secondUser, _swaps[swapId].initiatorNftId);
+    safeTransferFrom(
+      address(this),
+      _swaps[swapId].initiator,
+      _swaps[swapId].secondUserNftAddress,
+      _swaps[swapId].secondUserNftId
+    );
+    safeTransferFrom(
+      address(this),
+      _swaps[swapId].secondUser,
+      _swaps[swapId].initiatorNftAddress,
+      _swaps[swapId].initiatorNftId
+    );
   }
 
   function rejectSwap(uint256 swapId)public {
-    safeTransferFrom(address(this), _swaps[swapId].initiator, _swaps[swapId].initiatorNftId);
+    safeTransferFrom(
+      address(this),
+      _swaps[swapId].initiator,
+      _swaps[swapId].initiatorNftAddress,
+      _swaps[swapId].initiatorNftId
+    );
 
     if(_swaps[swapId].initiator == msg.sender){
-      safeTransferFrom(address(this), _swaps[swapId].secondUser, _swaps[swapId].secondUserNftId);
+      safeTransferFrom(
+        address(this),
+        _swaps[swapId].secondUser,
+        _swaps[swapId].secondUserNftAddress,
+        _swaps[swapId].secondUserNftId
+      );
     }
   }
 
-  function safeTransferFrom(address from, address to, uint256 tokenId) public virtual {
-    IERC721 erc721 = IERC721(from);
-    erc721.safeTransferFrom(from, to, tokenId);
+  function safeTransferFrom(address from, address to, address tokenAddress, uint256 tokenId) public virtual {
+    safeTransferFrom(from, to, tokenAddress, tokenId, "");
+  }
+
+  function safeTransferFrom(
+      address from,
+      address to,
+      address tokenAddress,
+      uint256 tokenId,
+      bytes memory _data
+    ) public virtual {
+    IERC721(tokenAddress).safeTransferFrom(from, to, tokenId, _data);
+    require(_checkOnERC721Received(from, to, tokenId, _data), "ERC721: transfer to non ERC721Receiver implementer");
   }
 
   function withdrawEther(address payable recipient, uint256 amount) public onlyOwner {
