@@ -2,9 +2,9 @@
 
 pragma solidity ^0.8.1;
 
-import "hardhat/console.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
@@ -27,40 +27,51 @@ contract Escrow is Ownable, RevertMsg {
   }
 
   event Transfer(address indexed from, address indexed to, uint256 value);
+  event SwapCreated(uint256 swapId);
+
+  modifier onlyInitiator(uint256 swapId) {
+    require(msg.sender == _swaps[swapId].initiator);
+    _;
+  }
 
   function setAppFee(uint newFee) public onlyOwner {
     fee = newFee;
   }
 
-  function depositNft(address secondUser, address nftAddress, uint256 nftId) public returns(uint256){
-    safeTransferFrom(nftAddress, address(this), nftAddress, nftId);
-    _swapId += 1;
+  function depositNfts(address secondUser, address[] memory nftAddresses, uint256[] memory nftIds) public {
+    for (uint256 i=0; i < nftIds.length; i++){
+      safeTransferFrom(nftAddresses[i], address(this), nftAddresses[i], nftIds[i]);
+      _swapId += 1;
 
-    Swap storage swap = _swaps[_swapId];
-    if(swap.initiator == address(0)){
-      swap.initiator = msg.sender;
-      swap.initiatorNftAddress = nftAddress;
-      swap.initiatorNftId = nftId;
-      swap.secondUser = secondUser;
-    } else {
-      swap.secondUserNftAddress = nftAddress;
-      swap.secondUserNftId = nftId;
+      Swap storage swap = _swaps[_swapId];
+      if(swap.initiator == address(0)){
+        swap.initiator = msg.sender;
+        swap.initiatorNftAddress = nftAddresses[i];
+        swap.initiatorNftId = nftIds[i];
+        swap.secondUser = secondUser;
+      } else {
+        swap.secondUserNftAddress = nftAddresses[i];
+        swap.secondUserNftId = nftIds[i];
+      }
     }
 
     (bool success, bytes memory data) = address(this).call{value: fee}("");
     if (success != true) {
         revert(_getRevertMsg(data));
     }
-    return _swapId;
+    emit SwapCreated(_swapId);
   }
 
-  function acceptSwap(uint256 swapId) public {
+  function acceptSwap(uint256 swapId) public onlyInitiator(swapId) {
+    // transfer NFTs from initiator to escrow
     safeTransferFrom(
       address(this),
       _swaps[swapId].initiator,
       _swaps[swapId].secondUserNftAddress,
       _swaps[swapId].secondUserNftId
     );
+
+    // transfer NFTs from second user to escrow
     safeTransferFrom(
       address(this),
       _swaps[swapId].secondUser,
@@ -69,7 +80,11 @@ contract Escrow is Ownable, RevertMsg {
     );
   }
 
-  function rejectSwap(uint256 swapId)public {
+  function rejectSwap(uint256 swapId) public {
+    require(_swaps[swapId].secondUserNftAddress != address(0),
+     "Escrow: Can't reject swap, other user didn't add NFTs");
+
+    // return initiator NFTs
     safeTransferFrom(
       address(this),
       _swaps[swapId].initiator,
@@ -77,6 +92,7 @@ contract Escrow is Ownable, RevertMsg {
       _swaps[swapId].initiatorNftId
     );
 
+    // return second user NFTs
     if(_swaps[swapId].initiator == msg.sender){
       safeTransferFrom(
         address(this),
