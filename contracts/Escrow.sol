@@ -2,6 +2,7 @@
 
 pragma solidity ^0.8.1;
 
+import "hardhat/console.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
@@ -12,21 +13,21 @@ import "./RevertMsg.sol";
 
 contract Escrow is Ownable, RevertMsg {
 
-  uint256 private _swapId;
+  uint256 private _swapsCounter;
   uint256 public fee;
   mapping (address => uint256) private _balances;
   mapping (uint256 => Swap) private _swaps;
 
   struct Swap {
     address initiator;
-    address initiatorNftAddress;
-    uint256 initiatorNftId;
+    address[] initiatorNftAddresses;
+    uint256[] initiatorNftIds;
     address secondUser;
-    address secondUserNftAddress;
-    uint256 secondUserNftId;
+    address[] secondUserNftAddresses;
+    uint256[] secondUserNftIds;
   }
 
-  event Transfer(address indexed from, address indexed to, uint256 value);
+  event SwapExecuted(address indexed from, address indexed to, uint256 value);
   event SwapCreated(uint256 swapId);
 
   modifier onlyInitiator(uint256 swapId) {
@@ -39,27 +40,26 @@ contract Escrow is Ownable, RevertMsg {
   }
 
   function depositNfts(address secondUser, address[] memory nftAddresses, uint256[] memory nftIds) public {
-    for (uint256 i=0; i < nftIds.length; i++){
-      safeTransferFrom(nftAddresses[i], address(this), nftAddresses[i], nftIds[i]);
-      _swapId += 1;
+    require(nftAddresses.length == nftIds.length, "Escrow: NFT and ID arrays have to be same length");
+      safeTransferFrom(msg.sender, address(this), nftAddresses, nftIds);
+      _swapsCounter += 1;
 
-      Swap storage swap = _swaps[_swapId];
+      Swap storage swap = _swaps[_swapsCounter];
       if(swap.initiator == address(0)){
         swap.initiator = msg.sender;
-        swap.initiatorNftAddress = nftAddresses[i];
-        swap.initiatorNftId = nftIds[i];
+        swap.initiatorNftAddresses = nftAddresses;
+        swap.initiatorNftIds = nftIds;
         swap.secondUser = secondUser;
       } else {
-        swap.secondUserNftAddress = nftAddresses[i];
-        swap.secondUserNftId = nftIds[i];
+        swap.secondUserNftAddresses = nftAddresses;
+        swap.secondUserNftIds = nftIds;
       }
-    }
 
     (bool success, bytes memory data) = address(this).call{value: fee}("");
     if (success != true) {
         revert(_getRevertMsg(data));
     }
-    emit SwapCreated(_swapId);
+    emit SwapCreated(_swapsCounter);
   }
 
   function acceptSwap(uint256 swapId) public onlyInitiator(swapId) {
@@ -67,29 +67,31 @@ contract Escrow is Ownable, RevertMsg {
     safeTransferFrom(
       address(this),
       _swaps[swapId].initiator,
-      _swaps[swapId].secondUserNftAddress,
-      _swaps[swapId].secondUserNftId
+      _swaps[swapId].secondUserNftAddresses,
+      _swaps[swapId].secondUserNftIds
     );
 
     // transfer NFTs from second user to escrow
     safeTransferFrom(
       address(this),
       _swaps[swapId].secondUser,
-      _swaps[swapId].initiatorNftAddress,
-      _swaps[swapId].initiatorNftId
+      _swaps[swapId].initiatorNftAddresses,
+      _swaps[swapId].initiatorNftIds
     );
+
+    emit SwapExecuted(_swaps[swapId].initiator, _swaps[swapId].secondUser, swapId);
   }
 
   function rejectSwap(uint256 swapId) public {
-    require(_swaps[swapId].secondUserNftAddress != address(0),
+    require(_swaps[swapId].secondUserNftAddresses[0] != address(0),
      "Escrow: Can't reject swap, other user didn't add NFTs");
 
     // return initiator NFTs
     safeTransferFrom(
       address(this),
       _swaps[swapId].initiator,
-      _swaps[swapId].initiatorNftAddress,
-      _swaps[swapId].initiatorNftId
+      _swaps[swapId].initiatorNftAddresses,
+      _swaps[swapId].initiatorNftIds
     );
 
     // return second user NFTs
@@ -97,14 +99,21 @@ contract Escrow is Ownable, RevertMsg {
       safeTransferFrom(
         address(this),
         _swaps[swapId].secondUser,
-        _swaps[swapId].secondUserNftAddress,
-        _swaps[swapId].secondUserNftId
+        _swaps[swapId].secondUserNftAddresses,
+        _swaps[swapId].secondUserNftIds
       );
     }
   }
 
-  function safeTransferFrom(address from, address to, address tokenAddress, uint256 tokenId) public virtual {
-    safeTransferFrom(from, to, tokenAddress, tokenId, "");
+  function safeTransferFrom(
+      address from,
+      address to,
+      address[] memory nftAddresses,
+      uint256[] memory nftIds
+    ) public virtual {
+    for (uint256 i=0; i < nftIds.length; i++){
+      safeTransferFrom(from, to, nftAddresses[i], nftIds[i], "");
+    }
   }
 
   function safeTransferFrom(
