@@ -65,6 +65,13 @@ contract SwapKiwi is Ownable {
     public payable chargeAppFee requireSameLength(nftAddresses, nftIds) {
       _swapsCounter += 1;
 
+      safeMultipleTransfersFrom(
+        msg.sender,
+        address(this),
+        nftAddresses,
+        nftIds
+    );
+
       Swap storage swap = _swaps[_swapsCounter];
       swap.initiator = msg.sender;
       swap.initiatorNftAddresses = nftAddresses;
@@ -86,6 +93,13 @@ contract SwapKiwi is Ownable {
   function initiateSwap(uint256 swapId, address[] memory nftAddresses, uint256[] memory nftIds)
     public payable chargeAppFee requireSameLength(nftAddresses, nftIds) {
       require(_swaps[swapId].secondUser == msg.sender, "SwapKiwi: caller is not swap participator");
+
+      safeMultipleTransfersFrom(
+        msg.sender,
+        address(this),
+        nftAddresses,
+        nftIds
+    );
 
       _swaps[swapId].secondUserNftAddresses = nftAddresses;
       _swaps[swapId].secondUserNftIds = nftIds;
