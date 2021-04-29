@@ -9,9 +9,8 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
-import "./RevertMsg.sol";
 
-contract Escrow is Ownable, RevertMsg {
+contract SwapKiwi is Ownable {
 
   uint256 private _swapsCounter;
   uint256 public fee;
@@ -27,11 +26,25 @@ contract Escrow is Ownable, RevertMsg {
     uint256[] secondUserNftIds;
   }
 
-  event SwapExecuted(address indexed from, address indexed to, uint256 value);
-  event SwapCreated(uint256 swapId);
+  event SwapExecuted(address indexed from, address indexed to, uint256 indexed swapId);
+  event SwapRejected(address indexed from, address indexed to, uint256 indexed swapId);
+  event SwapCanceled(address indexed from, uint256 indexed swapId);
+  event SwapProposed(uint256 indexed swapId);
+  event SwapInitiated(uint256 indexed swapId);
 
   modifier onlyInitiator(uint256 swapId) {
-    require(msg.sender == _swaps[swapId].initiator);
+    require(msg.sender == _swaps[swapId].initiator,
+      "SwapKiwi: caller is not swap initiator");
+    _;
+  }
+
+  modifier requireSameLength(address[] memory nftAddresses, uint256[] memory nftIds) {
+    require(nftAddresses.length == nftIds.length, "SwapKiwi: NFT and ID arrays have to be same length");
+    _;
+  }
+
+  modifier chargeAppFee() {
+    require(msg.value == fee, "SwapKiwi: Sent ETH amount needs to equal application fee");
     _;
   }
 
@@ -39,40 +52,40 @@ contract Escrow is Ownable, RevertMsg {
     fee = newFee;
   }
 
-  function depositNfts(address secondUser, address[] memory nftAddresses, uint256[] memory nftIds) public {
-    require(nftAddresses.length == nftIds.length, "Escrow: NFT and ID arrays have to be same length");
-      safeTransferFrom(msg.sender, address(this), nftAddresses, nftIds);
+  function proposeSwap(address secondUser, address[] memory nftAddresses, uint256[] memory nftIds)
+    public payable chargeAppFee requireSameLength(nftAddresses, nftIds) {
       _swapsCounter += 1;
 
       Swap storage swap = _swaps[_swapsCounter];
-      if(swap.initiator == address(0)){
-        swap.initiator = msg.sender;
-        swap.initiatorNftAddresses = nftAddresses;
-        swap.initiatorNftIds = nftIds;
-        swap.secondUser = secondUser;
-      } else {
-        swap.secondUserNftAddresses = nftAddresses;
-        swap.secondUserNftIds = nftIds;
-      }
+      swap.initiator = msg.sender;
+      swap.initiatorNftAddresses = nftAddresses;
+      swap.initiatorNftIds = nftIds;
+      swap.secondUser = secondUser;
 
-    (bool success, bytes memory data) = address(this).call{value: fee}("");
-    if (success != true) {
-        revert(_getRevertMsg(data));
-    }
-    emit SwapCreated(_swapsCounter);
+      emit SwapProposed(_swapsCounter);
+  }
+
+  function initiateSwap(uint256 swapId, address[] memory nftAddresses, uint256[] memory nftIds)
+    public payable chargeAppFee requireSameLength(nftAddresses, nftIds) {
+      require(_swaps[swapId].secondUser == msg.sender, "SwapKiwi: caller is not swap participator");
+
+      _swaps[swapId].secondUserNftAddresses = nftAddresses;
+      _swaps[swapId].secondUserNftIds = nftIds;
+
+      emit SwapInitiated(swapId);
   }
 
   function acceptSwap(uint256 swapId) public onlyInitiator(swapId) {
-    // transfer NFTs from initiator to escrow
-    safeTransferFrom(
+    // transfer NFTs from escrow to initiator
+    safeMultipleTransfersFrom(
       address(this),
       _swaps[swapId].initiator,
       _swaps[swapId].secondUserNftAddresses,
       _swaps[swapId].secondUserNftIds
     );
 
-    // transfer NFTs from second user to escrow
-    safeTransferFrom(
+    // transfer NFTs from escrow to second user
+    safeMultipleTransfersFrom(
       address(this),
       _swaps[swapId].secondUser,
       _swaps[swapId].initiatorNftAddresses,
@@ -82,12 +95,24 @@ contract Escrow is Ownable, RevertMsg {
     emit SwapExecuted(_swaps[swapId].initiator, _swaps[swapId].secondUser, swapId);
   }
 
-  function rejectSwap(uint256 swapId) public {
-    require(_swaps[swapId].secondUserNftAddresses[0] != address(0),
-     "Escrow: Can't reject swap, other user didn't add NFTs");
+  function cancelSwap(uint256 swapId) public {
+    require(_swaps[swapId].secondUserNftAddresses.length != 0,
+      "SwapKiwi: Can't cancel swap, other user didn't add NFTs");
 
     // return initiator NFTs
-    safeTransferFrom(
+    safeMultipleTransfersFrom(
+      address(this),
+      _swaps[swapId].initiator,
+      _swaps[swapId].initiatorNftAddresses,
+      _swaps[swapId].initiatorNftIds
+    );
+
+    emit SwapCanceled(_swaps[swapId].initiator, swapId);
+  }
+
+  function rejectSwap(uint256 swapId) public onlyInitiator(swapId)  {
+    // return initiator NFTs
+    safeMultipleTransfersFrom(
       address(this),
       _swaps[swapId].initiator,
       _swaps[swapId].initiatorNftAddresses,
@@ -96,16 +121,18 @@ contract Escrow is Ownable, RevertMsg {
 
     // return second user NFTs
     if(_swaps[swapId].initiator == msg.sender){
-      safeTransferFrom(
+      safeMultipleTransfersFrom(
         address(this),
         _swaps[swapId].secondUser,
         _swaps[swapId].secondUserNftAddresses,
         _swaps[swapId].secondUserNftIds
       );
     }
+
+    emit SwapRejected(_swaps[swapId].initiator, _swaps[swapId].secondUser, swapId);
   }
 
-  function safeTransferFrom(
+  function safeMultipleTransfersFrom(
       address from,
       address to,
       address[] memory nftAddresses,
@@ -124,14 +151,14 @@ contract Escrow is Ownable, RevertMsg {
       bytes memory _data
     ) public virtual {
     IERC721(tokenAddress).safeTransferFrom(from, to, tokenId, _data);
-    require(_checkOnERC721Received(from, to, tokenId, _data), "ERC721: transfer to non ERC721Receiver implementer");
+    require(_checkOnERC721Received(from, to, tokenId, _data), "SwapKiwi: transfer to non ERC721Receiver implementer");
   }
 
   function withdrawEther(address payable recipient, uint256 amount) public onlyOwner {
-    require(recipient != address(0), "Escrow: transfer to the zero address");
+    require(recipient != address(0), "SwapKiwi: transfer to the zero address");
     require(
         address(this).balance >= amount,
-        "Escrow: insufficient ETH in contract"
+        "SwapKiwi: insufficient ETH in contract"
     );
     recipient.transfer(amount);
   }
@@ -144,7 +171,7 @@ contract Escrow is Ownable, RevertMsg {
             return retval == IERC721Receiver(to).onERC721Received.selector;
         } catch (bytes memory reason) {
             if (reason.length == 0) {
-                revert("Escrow: transfer to non ERC721Receiver implementer");
+                revert("SwapKiwi: transfer to non ERC721Receiver implementer");
             } else {
               // solhint-disable-next-line no-inline-assembly
               assembly {
