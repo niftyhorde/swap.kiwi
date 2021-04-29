@@ -210,7 +210,6 @@ contract SwapKiwi is Ownable {
       bytes memory _data
     ) public virtual {
     IERC721(tokenAddress).safeTransferFrom(from, to, tokenId, _data);
-    require(_checkOnERC721Received(from, to, tokenId, _data), "SwapKiwi: transfer to non ERC721Receiver implementer");
   }
 
   function withdrawEther(address payable recipient, uint256 amount) public onlyOwner {
@@ -220,26 +219,5 @@ contract SwapKiwi is Ownable {
         "SwapKiwi: insufficient ETH in contract"
     );
     recipient.transfer(amount);
-  }
-
-  function _checkOnERC721Received(address from, address to, uint256 tokenId, bytes memory _data)
-    private returns (bool)
-  {
-    if (Address.isContract(to)) {
-        try IERC721Receiver(to).onERC721Received(_msgSender(), from, tokenId, _data) returns (bytes4 retval) {
-            return retval == IERC721Receiver(to).onERC721Received.selector;
-        } catch (bytes memory reason) {
-            if (reason.length == 0) {
-                revert("SwapKiwi: transfer to non ERC721Receiver implementer");
-            } else {
-              // solhint-disable-next-line no-inline-assembly
-              assembly {
-                revert(add(32, reason), mload(reason))
-            }
-          }
-        }
-      } else {
-        return true;
-    }
   }
 }
