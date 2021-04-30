@@ -147,7 +147,7 @@ contract SwapKiwi is Ownable {
     */
   function cancelSwap(uint256 swapId) public {
     require(_swaps[swapId].secondUserNftAddresses.length == 0,
-      "SwapKiwi: Can't cancel swap, other user didn't add NFTs");
+      "SwapKiwi: Can't cancel swap after other user added NFTs");
 
     // return initiator NFTs
     safeMultipleTransfersFrom(
