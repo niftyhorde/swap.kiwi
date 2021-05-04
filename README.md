@@ -1,4 +1,4 @@
-# Buidler-Starter
+b# Buidler-Starter
 
 ## Requirements
 
@@ -32,3 +32,15 @@ Run `yarn run help` to see all available commands:
 * `test:gas` - Runs gas check
 * `test:coverage` - Runs solidity coverage
 * `typechain` - Generate Typechain typings for compiled contracts
+
+## Swap flow
+
+1. First user starts a swap by calling `proposeSwap` and providing the address of the second user he wants to trade with and arrays of NFT addresses and IDs he wants to trade -> NFTs transfered to `SwapKiwi` contract
+
+2. Second user can now progress the swap by calling `initiateSwap` with arrays of NFT addresses and IDs he wants to trade -> NFTs transfered to `SwapKiwi` contract
+OR
+cancel it by calling `cancelSwap` -> NFTs transfered back to swap initiator</br>
+
+3. First user can now execute the swap by calling `acceptSwap` -> NFTs transfered from `SwapKiwi` to participants
+OR
+ reject the swap entirely by calling `rejectSwap` -> NFTs transfered from `SwapKiwi` to their owners
