@@ -2,7 +2,6 @@
 
 pragma solidity ^0.8.1;
 
-import "hardhat/console.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
@@ -10,7 +9,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 
-contract SwapKiwi is Ownable {
+contract SwapKiwi is Ownable, IERC721Receiver {
 
   uint256 private _swapsCounter;
   uint256 public fee;
@@ -219,5 +218,16 @@ contract SwapKiwi is Ownable {
         "SwapKiwi: insufficient ETH in contract"
     );
     recipient.transfer(amount);
+  }
+
+  function onERC721Received(
+    /* solhint-disable */
+      address operator,
+      address from,
+      uint256 tokenId,
+      bytes calldata data
+    /* solhint-enable */
+    ) external pure override returns (bytes4) {
+      return bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"));
   }
 }
