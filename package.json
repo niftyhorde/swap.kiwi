@@ -3,7 +3,7 @@
   "version": "0.1.0-beta",
   "private": false,
   "repository": {
-    "url": "git@github.com:NodeFactoryIo/swap.kiwi.git",
+    "url": "git@github.com:niftyhorde/swap.kiwi.git",
     "type": "git"
   },
   "authors": [
