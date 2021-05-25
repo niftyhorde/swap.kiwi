@@ -15,8 +15,8 @@ describe("Escrow", async function () {
   let TestNFT: Deployment;
   let testNFT: TestNFT;
   let signers: Signer[];
-  let appUser: Contract;
-  let otherAppUser: Contract;
+  let appUser: SwapKiwi;
+  let otherAppUser: SwapKiwi;
   const VALID_APP_FEE = ethers.utils.parseEther("0.1");
 
   before(async () => {
