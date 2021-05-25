@@ -26,10 +26,22 @@ contract SwapKiwi is Ownable, IERC721Receiver {
   }
 
   event SwapExecuted(address indexed from, address indexed to, uint256 indexed swapId);
-  event SwapRejected(address indexed from, address indexed to, uint256 indexed swapId);
-  event SwapCanceled(address indexed from, uint256 indexed swapId);
-  event SwapProposed(uint256 indexed swapId);
-  event SwapInitiated(uint256 indexed swapId);
+  event SwapRejected(address indexed rejectedBy, uint256 indexed swapId);
+  event SwapCanceled(address indexed canceledBy, uint256 indexed swapId);
+  event SwapProposed(
+    address indexed from,
+    address indexed to,
+    uint256 indexed swapId,
+    address[] nftAddresses,
+    uint256[] nftIds
+  );
+  event SwapInitiated(
+    address indexed from,
+    address indexed to,
+    uint256 indexed swapId,
+    address[] nftAddresses,
+    uint256[] nftIds
+  );
 
   modifier onlyInitiator(uint256 swapId) {
     require(msg.sender == _swaps[swapId].initiator,
@@ -45,6 +57,10 @@ contract SwapKiwi is Ownable, IERC721Receiver {
   modifier chargeAppFee() {
     require(msg.value == fee, "SwapKiwi: Sent ETH amount needs to equal application fee");
     _;
+  }
+
+  constructor(uint256 initalAppFee) {
+    fee = initalAppFee;
   }
 
   function setAppFee(uint newFee) public onlyOwner {
@@ -77,7 +93,7 @@ contract SwapKiwi is Ownable, IERC721Receiver {
       swap.initiatorNftIds = nftIds;
       swap.secondUser = secondUser;
 
-      emit SwapProposed(_swapsCounter);
+      emit SwapProposed(msg.sender, secondUser, _swapsCounter, nftAddresses, nftIds);
   }
 
   /**
@@ -103,7 +119,7 @@ contract SwapKiwi is Ownable, IERC721Receiver {
       _swaps[swapId].secondUserNftAddresses = nftAddresses;
       _swaps[swapId].secondUserNftIds = nftIds;
 
-      emit SwapInitiated(swapId);
+      emit SwapInitiated(msg.sender, _swaps[swapId].initiator, swapId, nftAddresses, nftIds);
   }
 
   /**
@@ -156,7 +172,7 @@ contract SwapKiwi is Ownable, IERC721Receiver {
       _swaps[swapId].initiatorNftIds
     );
 
-    emit SwapCanceled(_swaps[swapId].initiator, swapId);
+    emit SwapCanceled(msg.sender, swapId);
   }
 
   /**
@@ -187,7 +203,7 @@ contract SwapKiwi is Ownable, IERC721Receiver {
       _swaps[swapId].secondUserNftIds
     );
 
-    emit SwapRejected(_swaps[swapId].initiator, _swaps[swapId].secondUser, swapId);
+    emit SwapRejected(msg.sender, swapId);
   }
 
   function safeMultipleTransfersFrom(
