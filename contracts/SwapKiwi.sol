@@ -59,6 +59,10 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     _;
   }
 
+  constructor(uint256 initalAppFee) {
+    fee = initalAppFee;
+  }
+
   function setAppFee(uint newFee) public onlyOwner {
     fee = newFee;
   }
