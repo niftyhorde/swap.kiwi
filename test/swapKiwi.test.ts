@@ -1,11 +1,13 @@
 import { Deployment } from "hardhat-deploy/types";
 import { expect, use } from "chai";
-import hre, { ethers, deployments } from "hardhat";
+import { ethers, deployments, network } from "hardhat";
 import { SwapKiwi } from "../typechain/SwapKiwi";
 import { TestNFT } from "../typechain/TestNFT";
-import { Contract, Signer } from "ethers";
+import { Contract, Signer, Wallet } from "ethers";
 import { TransactionReceipt } from "@ethersproject/providers";
 import chaiAsPromised from 'chai-as-promised';
+
+import { cryptoPunksAbi } from "./cryptoPunksAbi"
 
 use(chaiAsPromised);
 
@@ -17,16 +19,44 @@ describe("Escrow", async function () {
   let signers: Signer[];
   let appUser: SwapKiwi;
   let otherAppUser: SwapKiwi;
+  let cryptoPunks: Contract;
+  let cryptoPunks1Signer: Signer;
+
   const VALID_APP_FEE = ethers.utils.parseEther("0.1");
+  const cryptoPunksMainnetAddress = "0xb47e3cd837dDF8e4c57F05d70Ab865de6e193BBB";
 
   before(async () => {
+    await network.provider.request({
+      method: "hardhat_impersonateAccount",
+      params: ["0xB88F61E6FbdA83fbfffAbE364112137480398018"]
+    });
+
     signers = await ethers.getSigners();
     ({ SwapKiwi, TestNFT } = await deployments.fixture());
     swapKiwi = await ethers.getContractAt(SwapKiwi.abi, SwapKiwi.address, signers[0]) as SwapKiwi;
     testNFT = await ethers.getContractAt(TestNFT.abi, TestNFT.address, signers[1]) as TestNFT;
+    cryptoPunks = await ethers.getContractAt(cryptoPunksAbi, cryptoPunksMainnetAddress);
 
     appUser = new ethers.Contract(swapKiwi.address, SwapKiwi.abi, signers[1]) as SwapKiwi;
     otherAppUser = new ethers.Contract(swapKiwi.address, SwapKiwi.abi, signers[1]) as SwapKiwi;
+    cryptoPunks1Signer = ethers.provider.getSigner("0xB88F61E6FbdA83fbfffAbE364112137480398018");
+  });
+
+  after(async () => {
+    await network.provider.request({
+      method: "hardhat_stopImpersonatingAccount",
+      params: ["0xB88F61E6FbdA83fbfffAbE364112137480398018"]
+    });
+
+    await network.provider.request({
+      method: "hardhat_reset",
+      params: [{
+        forking: {
+          jsonRpcUrl: `https://eth-mainnet.alchemyapi.io/v2/${process.env.ALCHEMY_APP_ID}`,
+          blockNumber: 12503592
+        }
+      }]
+    })
   });
 
   function getFilterName(eventName: string) {
@@ -229,6 +259,7 @@ describe("Escrow", async function () {
     expect(await testNFT.ownerOf(86)).to.be.deep.equal(await signers[1].getAddress());
     expect(await testNFT.ownerOf(87)).to.be.deep.equal(await signers[1].getAddress());
     expect(await testNFT.ownerOf(88)).to.be.deep.equal(await signers[1].getAddress());
+
   });
 
   it("Should successful withdraw collected fees from SwapKiwi if called by owner", async function () {
@@ -242,5 +273,19 @@ describe("Escrow", async function () {
     await expect(appUser.withdrawEther(appUser.address, ethers.utils.parseEther("1.0")))
       .to.be.rejectedWith(
         "VM Exception while processing transaction: revert Ownable: caller is not the owner");
+  });
+
+  it("Should successfully swap crypto punks", async function () {
+    expect(await cryptoPunks.punkIndexToAddress(1)).to.be.deep.equal(
+      await cryptoPunks1Signer.getAddress()
+    );
+
+    await cryptoPunks1Signer.sendTransaction({
+      to: swapKiwi.address,
+      data: swapKiwi.interface.encodeFunctionData("proposeSwap", [
+        await signers[1].getAddress(), [cryptoPunks.address], [1]
+      ]),
+      value: VALID_APP_FEE
+    });
   });
 });
