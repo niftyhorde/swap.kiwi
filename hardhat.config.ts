@@ -1,4 +1,4 @@
-import {HardhatUserConfig} from "hardhat/types";
+import { HardhatUserConfig } from "hardhat/types";
 import accounts from "./test/Accounts"
 import dotenv from 'dotenv';
 
