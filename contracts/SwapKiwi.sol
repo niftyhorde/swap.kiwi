@@ -8,13 +8,15 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
+import "./RevertMsg.sol";
 
-contract SwapKiwi is Ownable, IERC721Receiver {
+contract SwapKiwi is Ownable, IERC721Receiver, RevertMsg {
 
   uint256 private _swapsCounter;
   uint256 public fee;
   mapping (address => uint256) private _balances;
   mapping (uint256 => Swap) private _swaps;
+  address private cryptoPunksAddress = 0xb47e3cd837dDF8e4c57F05d70Ab865de6e193BBB;
 
   struct Swap {
     address initiator;
@@ -224,6 +226,14 @@ contract SwapKiwi is Ownable, IERC721Receiver {
       uint256 tokenId,
       bytes memory _data
     ) public virtual {
+      if(tokenAddress == cryptoPunksAddress) {
+        (bool success, bytes memory data) = address(cryptoPunksAddress).call(
+          abi.encodeWithSignature("transferPunk(address, uint)", to, tokenId)
+        );
+        if (success != true) {
+          revert(_getRevertMsg(data));
+        }
+      }
     IERC721(tokenAddress).safeTransferFrom(from, to, tokenId, _data);
   }
 
