@@ -101,7 +101,7 @@ jobs:
 
       - name: Push docker image to GitHub Packages
         uses: docker/build-push-action@v1
-        with hardhat :
+        with:
           username: ${{ github.actor }}
           password: ${{ secrets.CR_WRITE_PAT }}
           registry: ghcr.io
