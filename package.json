@@ -33,7 +33,7 @@
     "help": "npx hardhat help",
     "node:local": "npx hardhat node",
     "script": "hardhat run",
-    "test": "hardhat test --network hardhatevm",
+    "test": "hardhat test",
     "test:localhost": "./wait-for-it.sh localhost:8545 -- hardhat test --network localhost",
     "test:ci": "yarn run test:gas && yarn run test:coverage",
     "test:gas": "REPORT_GAS=true concurrently --raw --kill-others --success first \"hardhat node\" \"yarn test:localhost\"",
