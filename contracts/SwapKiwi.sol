@@ -8,9 +8,14 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
-import "./RevertMsg.sol";
 
-contract SwapKiwi is Ownable, IERC721Receiver, RevertMsg {
+interface ICryptoPunks {
+  function punkIndexToAddress(uint punkIndex) external view returns (address);
+
+  function transferPunk(address punkIndex, uint transferPunkIndex) external;
+}
+
+contract SwapKiwi is Ownable, IERC721Receiver {
 
   uint256 private _swapsCounter;
   uint256 public fee;
@@ -227,14 +232,16 @@ contract SwapKiwi is Ownable, IERC721Receiver, RevertMsg {
       bytes memory _data
     ) public virtual {
       if(tokenAddress == cryptoPunksAddress) {
-        (bool success, bytes memory data) = address(cryptoPunksAddress).call(
-          abi.encodeWithSignature("transferPunk(address, uint)", to, tokenId)
+        ICryptoPunks cryptoPunks = ICryptoPunks(cryptoPunksAddress);
+
+        require(cryptoPunks.punkIndexToAddress(tokenId) == address(this),
+          "SwapKiwi: CryptoPunk not deposited into SwapKiwi"
         );
-        if (success != true) {
-          revert(_getRevertMsg(data));
-        }
+        // transfer CryptoPunk from SwapKiwi to specified swap user
+        cryptoPunks.transferPunk(to, tokenId);
+      } else {
+        IERC721(tokenAddress).safeTransferFrom(from, to, tokenId, _data);
       }
-    IERC721(tokenAddress).safeTransferFrom(from, to, tokenId, _data);
   }
 
   function withdrawEther(address payable recipient, uint256 amount) public onlyOwner {
