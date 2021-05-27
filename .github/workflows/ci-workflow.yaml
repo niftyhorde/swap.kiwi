@@ -14,6 +14,8 @@ jobs:
       - run: yarn install --frozen-lockfile --non-interactive
       - name: Build
         run: yarn run build
+        env:
+          ALCHEMY_APP_ID: ${{ secrets.ALCHEMY_APP_ID }}
       - name: Run linter
         run: yarn run lint
       - name: Run tests
