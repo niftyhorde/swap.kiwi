@@ -8,12 +8,8 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
+import "./ICryptoPunks.sol";
 
-interface ICryptoPunks {
-  function punkIndexToAddress(uint punkIndex) external view returns (address);
-
-  function transferPunk(address punkIndex, uint transferPunkIndex) external;
-}
 
 contract SwapKiwi is Ownable, IERC721Receiver {
 
