@@ -230,13 +230,13 @@ contract SwapKiwi is Ownable, IERC721Receiver {
       if(tokenAddress == cryptoPunksAddress) {
         ICryptoPunks cryptoPunks = ICryptoPunks(cryptoPunksAddress);
 
-        require(cryptoPunks.punkIndexToAddress(tokenId) == address(this),
-          "SwapKiwi: CryptoPunk not deposited into SwapKiwi"
-        );
-
         // transfer CryptoPunk from SwapKiwi to specified swap user
         if(to != address(this)){
           cryptoPunks.transferPunk(to, tokenId);
+        } else {
+          require(cryptoPunks.punkIndexToAddress(tokenId) == address(this),
+            "SwapKiwi: CryptoPunk not deposited into SwapKiwi"
+          );
         }
       } else {
         IERC721(tokenAddress).safeTransferFrom(from, to, tokenId, _data);
