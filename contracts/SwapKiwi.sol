@@ -234,6 +234,7 @@ contract SwapKiwi is Ownable, IERC721Receiver {
         if(to != address(this)){
           cryptoPunks.transferPunk(to, tokenId);
         } else {
+          // in other cases just check that the escrow has the token (user pre-transfered it)
           require(cryptoPunks.punkIndexToAddress(tokenId) == address(this),
             "SwapKiwi: CryptoPunk not deposited into SwapKiwi"
           );
