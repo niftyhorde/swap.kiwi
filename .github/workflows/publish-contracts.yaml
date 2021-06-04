@@ -52,8 +52,6 @@ jobs:
       - name: Compile contracts
         run: yarn run compile
 
-      - name: Deploy local
-        run: yarn run deploy:local
       - name: Deploy goerli
         run: yarn run deploy:goerli
         env:
