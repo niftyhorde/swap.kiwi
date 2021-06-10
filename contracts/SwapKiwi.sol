@@ -158,9 +158,14 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     * @dev Returns NFTs from SwapKiwi to swap initator.
     *      Callable only if second user hasn't yet added NFTs.
     *
-    * @param swapId ID of the swap that the second user wants to cancel
+    * @param swapId ID of the swap that the swap participants want to cancel
     */
   function cancelSwap(uint256 swapId) public {
+    require(
+      _swaps[swapId].initiator == msg.sender || _swaps[swapId].secondUser == msg.sender,
+      "SwapKiwi: Can't cancel swap, must be swap participant"
+    );
+
     require(_swaps[swapId].secondUserNftAddresses.length == 0,
       "SwapKiwi: Can't cancel swap after other user added NFTs");
 
