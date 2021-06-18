@@ -18,5 +18,3 @@ jobs:
         run: yarn run lint
       - name: Run tests
         run: yarn run test:ci
-        env:
-          ALCHEMY_APP_ID: ${{ secrets.ALCHEMY_APP_ID }}

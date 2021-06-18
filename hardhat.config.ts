@@ -1,4 +1,4 @@
-import { HardhatUserConfig } from "hardhat/types";
+import {HardhatUserConfig} from "hardhat/types";
 import accounts from "./test/Accounts"
 import dotenv from 'dotenv';
 
@@ -30,11 +30,7 @@ const config: HardhatUserConfig = {
     hardhat: {
       loggingEnabled: false,
       live: false,
-      accounts: accounts,
-      forking: {
-        url: `https://eth-mainnet.alchemyapi.io/v2/${process.env.ALCHEMY_APP_ID}`,
-        blockNumber: 12503592
-      }
+      accounts: accounts
     },
     coverage: {
       url: 'http://127.0.0.1:5458'
