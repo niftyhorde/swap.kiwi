@@ -56,8 +56,9 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     _;
   }
 
-  constructor(uint256 initalAppFee) {
+  constructor(uint256 initalAppFee, address contractOwnerAddress) {
     fee = initalAppFee;
+    super.transferOwnership(contractOwnerAddress);
   }
 
   function setAppFee(uint newFee) public onlyOwner {
