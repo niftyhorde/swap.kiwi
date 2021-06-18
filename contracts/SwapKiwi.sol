@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
+import "./ICryptoPunks.sol";
 
 contract SwapKiwi is Ownable, IERC721Receiver {
 
@@ -15,6 +16,7 @@ contract SwapKiwi is Ownable, IERC721Receiver {
   uint256 public fee;
   mapping (address => uint256) private _balances;
   mapping (uint256 => Swap) private _swaps;
+  address private cryptoPunksAddress = 0xb47e3cd837dDF8e4c57F05d70Ab865de6e193BBB;
 
   struct Swap {
     address initiator;
@@ -229,7 +231,21 @@ contract SwapKiwi is Ownable, IERC721Receiver {
       uint256 tokenId,
       bytes memory _data
     ) public virtual {
-    IERC721(tokenAddress).safeTransferFrom(from, to, tokenId, _data);
+      if(tokenAddress == cryptoPunksAddress) {
+        ICryptoPunks cryptoPunks = ICryptoPunks(cryptoPunksAddress);
+
+        // transfer CryptoPunk from SwapKiwi to specified swap user
+        if(to != address(this)){
+          cryptoPunks.transferPunk(to, tokenId);
+        } else {
+          // in other cases just check that the escrow has the token (user pre-transfered it)
+          require(cryptoPunks.punkIndexToAddress(tokenId) == address(this),
+            "SwapKiwi: CryptoPunk not deposited into SwapKiwi"
+          );
+        }
+      } else {
+        IERC721(tokenAddress).safeTransferFrom(from, to, tokenId, _data);
+      }
   }
 
   function withdrawEther(address payable recipient, uint256 amount) public onlyOwner {
