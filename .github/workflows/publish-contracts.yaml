@@ -63,6 +63,7 @@ jobs:
         run: yarn run deploy:mainnet
         if: ${{ !contains(needs.tag.outputs.tag, 'beta') }}
         env:
+          CONTRACT:OWNER_ADDRESS: ${{ secrets.CONTRACT_OWNER_ADDRESS }}
           INFURA_PROJECT_ID: ${{ secrets.INFURA_PROJECT_ID }}
           MAINNET_MNEMONIC: ${{ secrets.MAINNET_MNEMONIC }}
       - name: Combine deployments
@@ -89,4 +90,3 @@ jobs:
           delete_orphan_tag: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
