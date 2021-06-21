@@ -1,13 +1,9 @@
-// SPDX-License-Identifier: UNLICENSED
-
 pragma solidity ^0.8.1;
 
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
 
 contract SwapKiwi is Ownable, IERC721Receiver {
 
@@ -59,8 +55,9 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     _;
   }
 
-  constructor(uint256 initalAppFee) {
+  constructor(uint256 initalAppFee, address contractOwnerAddress) {
     fee = initalAppFee;
+    super.transferOwnership(contractOwnerAddress);
   }
 
   function setAppFee(uint newFee) public onlyOwner {
@@ -77,7 +74,7 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     * @param nftIds array of IDs belonging to NFTs that want to be traded
     */
   function proposeSwap(address secondUser, address[] memory nftAddresses, uint256[] memory nftIds)
-    public payable chargeAppFee requireSameLength(nftAddresses, nftIds) {
+    external payable chargeAppFee requireSameLength(nftAddresses, nftIds) {
       _swapsCounter += 1;
 
       safeMultipleTransfersFrom(
@@ -106,7 +103,7 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     * @param nftIds array of IDs belonging to NFTs that want to be traded
     */
   function initiateSwap(uint256 swapId, address[] memory nftAddresses, uint256[] memory nftIds)
-    public payable chargeAppFee requireSameLength(nftAddresses, nftIds) {
+    external payable chargeAppFee requireSameLength(nftAddresses, nftIds) {
       require(_swaps[swapId].secondUser == msg.sender, "SwapKiwi: caller is not swap participator");
 
       safeMultipleTransfersFrom(
@@ -129,7 +126,7 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     *
     * @param swapId ID of the swap that the initator wants to execute
     */
-  function acceptSwap(uint256 swapId) public onlyInitiator(swapId) {
+  function acceptSwap(uint256 swapId) external onlyInitiator(swapId) {
     require( _swaps[swapId].secondUserNftAddresses.length != 0 &&
       _swaps[swapId].initiatorNftAddresses.length != 0,
        "SwapKiwi: Can't accept swap, both participants didn't add NFTs"
@@ -160,7 +157,7 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     *
     * @param swapId ID of the swap that the swap participants want to cancel
     */
-  function cancelSwap(uint256 swapId) public {
+  function cancelSwap(uint256 swapId) external {
     require(
       _swaps[swapId].initiator == msg.sender || _swaps[swapId].secondUser == msg.sender,
       "SwapKiwi: Can't cancel swap, must be swap participant"
@@ -186,7 +183,7 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     *
     * @param swapId ID of the swap that the initator wants to reject
     */
-  function rejectSwap(uint256 swapId) public onlyInitiator(swapId) {
+  function rejectSwap(uint256 swapId) external onlyInitiator(swapId) {
     require( _swaps[swapId].secondUserNftAddresses.length != 0 &&
       _swaps[swapId].initiatorNftAddresses.length != 0,
        "SwapKiwi: Can't reject swap, both participants didn't add NFTs"
@@ -216,7 +213,7 @@ contract SwapKiwi is Ownable, IERC721Receiver {
       address to,
       address[] memory nftAddresses,
       uint256[] memory nftIds
-    ) public virtual {
+    ) internal virtual {
     for (uint256 i=0; i < nftIds.length; i++){
       safeTransferFrom(from, to, nftAddresses[i], nftIds[i], "");
     }
@@ -228,11 +225,11 @@ contract SwapKiwi is Ownable, IERC721Receiver {
       address tokenAddress,
       uint256 tokenId,
       bytes memory _data
-    ) public virtual {
+    ) internal virtual {
     IERC721(tokenAddress).safeTransferFrom(from, to, tokenId, _data);
   }
 
-  function withdrawEther(address payable recipient, uint256 amount) public onlyOwner {
+  function withdrawEther(address payable recipient, uint256 amount) external onlyOwner {
     require(recipient != address(0), "SwapKiwi: transfer to the zero address");
     require(
         address(this).balance >= amount,
