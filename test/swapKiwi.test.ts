@@ -103,7 +103,7 @@ describe("Escrow", async function () {
     expect(await appUserNFT.ownerOf(25)).to.be.deep.equal(swapKiwi.address);
   });
 
-  it('Should succesfully cancel swap by first user and emit "SwapCanceled" event', async function () {
+  it('Should succesfully cancel swap by first user (after swap proposed) and emit "SwapCanceled" event', async function () {
     await appUserNFT.mint(appUserAddress, 140);
     await appUserNFT.approve(swapKiwi.address, 140);
     const tx = await appUser.proposeSwap(otherAppUserAddress, [appUserNFT.address], [140], {
@@ -126,7 +126,30 @@ describe("Escrow", async function () {
     expect(await appUserNFT.ownerOf(140)).to.be.deep.equal(appUserAddress);
   });
 
-  it('Should succesfully cancel swap by second user and emit "SwapCanceled" event', async function () {
+  it('Should succesfully cancel swap by second user (after swap proposed) and emit "SwapCanceled" event', async function () {
+    await appUserNFT.mint(appUserAddress, 141);
+    await appUserNFT.approve(swapKiwi.address, 141);
+    const tx = await appUser.proposeSwap(otherAppUserAddress, [appUserNFT.address], [141], {
+      value: VALID_APP_FEE
+    });
+    const txReceipt = await tx.wait(1);
+    const logs = await getEventWithArgsFromLogs(txReceipt, "SwapProposed");
+    const swapIdFromLogs = Number(logs.args.swapId.toString());
+
+    const cancelTx = await otherAppUser.cancelSwap(swapIdFromLogs);
+    const cancelTxReceipt = await cancelTx.wait(1);
+    const cancelTxlogs = await getEventWithArgsFromLogs(cancelTxReceipt, "SwapCanceled");
+
+    // check if all values are emitted in event
+    expect(cancelTxlogs.eventName).to.be.deep.equal("SwapCanceled");
+    expect(cancelTxlogs.args.canceledBy).to.be.deep.equal(otherAppUserAddress);
+    // expect that swap ID from "SwapCanceled" is same as swap ID from "swapProposed" event
+    expect(cancelTxlogs.args.swapId.toString()).to.be.deep.equal(String(swapIdFromLogs));
+    // check that NFT is returned to initial owner
+    expect(await appUserNFT.ownerOf(141)).to.be.deep.equal(appUserAddress);
+  });
+
+  it('Should succesfully cancel swap by first user (after swap initiated) and emit "SwapCanceled" event', async function () {
     await appUserNFT.mint(appUserAddress, 120);
     await appUserNFT.approve(swapKiwi.address, 120);
     const tx = await appUser.proposeSwap(otherAppUserAddress, [appUserNFT.address], [120], {
@@ -168,6 +191,50 @@ describe("Escrow", async function () {
     expect(await appUserNFT.ownerOf(120)).to.be.deep.equal(appUserAddress);
     expect(await appUserNFT.ownerOf(130)).to.be.deep.equal(otherAppUserAddress);
     expect(await appUserNFT.ownerOf(131)).to.be.deep.equal(otherAppUserAddress);
+  });
+
+  it('Should succesfully cancel swap by second user (after swap initiated) and emit "SwapCanceled" event', async function () {
+    await appUserNFT.mint(appUserAddress, 121);
+    await appUserNFT.approve(swapKiwi.address, 121);
+    const tx = await appUser.proposeSwap(otherAppUserAddress, [appUserNFT.address], [121], {
+      value: VALID_APP_FEE
+    });
+    const txReceipt = await tx.wait(1);
+    const logs = await getEventWithArgsFromLogs(txReceipt, "SwapProposed");
+    const swapIdFromLogs = Number(logs.args.swapId.toString());
+
+    await otherAppUserNFT.mint(otherAppUserAddress, 135);
+    await otherAppUserNFT.mint(otherAppUserAddress, 136);
+    await otherAppUserNFT.approve(swapKiwi.address, 135);
+    await otherAppUserNFT.approve(swapKiwi.address, 136);
+    const initiateSwapTx = await otherAppUser.initiateSwap(
+      swapIdFromLogs,
+      [otherAppUserNFT.address, otherAppUserNFT.address],
+      [135, 136],
+      {
+        value: VALID_APP_FEE
+      }
+    );
+    const initiateSwapTxReceipt = await initiateSwapTx.wait(1);
+    const initiateSwapLogs = await getEventWithArgsFromLogs(initiateSwapTxReceipt, "SwapInitiated");
+    // check if all values are emitted in "SwapInitiated" event
+    expect(initiateSwapLogs.eventName).to.be.deep.equal("SwapInitiated");
+    expect(initiateSwapLogs.args.from).to.be.deep.equal(otherAppUserAddress);
+    expect(initiateSwapLogs.args.to).to.be.deep.equal(appUserAddress);
+
+    const cancelTx = await otherAppUser.cancelSwap(swapIdFromLogs);
+    const cancelTxReceipt = await cancelTx.wait(1);
+    const cancelTxlogs = await getEventWithArgsFromLogs(cancelTxReceipt, "SwapCanceled");
+
+    // check if all values are emitted in event
+    expect(cancelTxlogs.eventName).to.be.deep.equal("SwapCanceled");
+    expect(cancelTxlogs.args.canceledBy).to.be.deep.equal(otherAppUserAddress);
+    // expect that swap ID from "SwapCanceled" is same as swap ID from "swapProposed" event
+    expect(cancelTxlogs.args.swapId.toString()).to.be.deep.equal(String(swapIdFromLogs));
+    // check that NFT is returned to initial owners
+    expect(await appUserNFT.ownerOf(121)).to.be.deep.equal(appUserAddress);
+    expect(await appUserNFT.ownerOf(135)).to.be.deep.equal(otherAppUserAddress);
+    expect(await appUserNFT.ownerOf(136)).to.be.deep.equal(otherAppUserAddress);
   });
 
   it('Should fail to initiate swap if swap canceled', async function () {
