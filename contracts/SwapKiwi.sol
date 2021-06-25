@@ -22,7 +22,6 @@ contract SwapKiwi is Ownable, IERC721Receiver {
   }
 
   event SwapExecuted(address indexed from, address indexed to, uint256 indexed swapId);
-  event SwapRejected(address indexed rejectedBy, uint256 indexed swapId);
   event SwapCanceled(address indexed canceledBy, uint256 indexed swapId);
   event SwapProposed(
     address indexed from,
@@ -168,51 +167,26 @@ contract SwapKiwi is Ownable, IERC721Receiver {
       _swaps[swapId].initiator == msg.sender || _swaps[swapId].secondUser == msg.sender,
       "SwapKiwi: Can't cancel swap, must be swap participant"
     );
-    require(_swaps[swapId].secondUserNftAddresses.length == 0,
-      "SwapKiwi: Can't cancel swap after other user added NFTs");
+      // return initiator NFTs
+      safeMultipleTransfersFrom(
+        address(this),
+        _swaps[swapId].initiator,
+        _swaps[swapId].initiatorNftAddresses,
+        _swaps[swapId].initiatorNftIds
+      );
 
-    // return initiator NFTs
-    safeMultipleTransfersFrom(
-      address(this),
-      _swaps[swapId].initiator,
-      _swaps[swapId].initiatorNftAddresses,
-      _swaps[swapId].initiatorNftIds
-    );
+    if(_swaps[swapId].secondUserNftAddresses.length != 0) {
+      // return second user NFTs
+      safeMultipleTransfersFrom(
+        address(this),
+        _swaps[swapId].secondUser,
+        _swaps[swapId].secondUserNftAddresses,
+        _swaps[swapId].secondUserNftIds
+      );
+    }
+
 
     emit SwapCanceled(msg.sender, swapId);
-
-    delete _swaps[swapId];
-  }
-
-  /**
-    * @dev Returns NFTs from SwapKiwi to swap initiator and second user.
-    *      Callable only by swap initiator and both users must have added NFTs to SwapKiwi.
-    *
-    * @param swapId ID of the swap that the initator wants to reject
-    */
-  function rejectSwap(uint256 swapId) external onlyInitiator(swapId) {
-    require( _swaps[swapId].secondUserNftAddresses.length != 0 &&
-      _swaps[swapId].initiatorNftAddresses.length != 0,
-       "SwapKiwi: Can't reject swap, both participants didn't add NFTs"
-    );
-
-    // return initiator NFTs
-    safeMultipleTransfersFrom(
-      address(this),
-      _swaps[swapId].initiator,
-      _swaps[swapId].initiatorNftAddresses,
-      _swaps[swapId].initiatorNftIds
-    );
-
-    // return second user NFTs
-    safeMultipleTransfersFrom(
-      address(this),
-      _swaps[swapId].secondUser,
-      _swaps[swapId].secondUserNftAddresses,
-      _swaps[swapId].secondUserNftIds
-    );
-
-    emit SwapRejected(msg.sender, swapId);
 
     delete _swaps[swapId];
   }
