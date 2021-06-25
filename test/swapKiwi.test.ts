@@ -148,6 +148,52 @@ describe("Escrow", async function () {
     expect(cancelTxlogs[1].args.swapId.toString()).to.be.deep.equal(String(swapIdFromLogs));
   });
 
+  it('Should fail to initiate swap if swap canceled', async function () {
+    await appUserNFT.mint(appUserAddress, 170);
+    await appUserNFT.approve(swapKiwi.address, 170);
+    const tx = await appUser.proposeSwap(otherAppUserAddress, [appUserNFT.address], [170], {
+      value: VALID_APP_FEE
+    });
+    const txReceipt = await tx.wait(1);
+    const logs = await getEventWithArgsFromLogs(txReceipt, "SwapProposed");
+    const swapIdFromLogs = Number(logs[logs.length - 2].args.swapId.toString());
+    const cancelTx = await appUser.cancelSwap(swapIdFromLogs);
+    await cancelTx.wait(1);
+
+    await otherAppUserNFT.mint(otherAppUserAddress, 301);
+    await otherAppUserNFT.approve(swapKiwi.address, 301);
+    await expect(otherAppUser.initiateSwap(swapIdFromLogs, [otherAppUserNFT.address], [301], {
+      value: VALID_APP_FEE
+    })).to.be.rejectedWith(
+      `VM Exception while processing transaction: revert SwapKiwi: caller is not swap participator`
+    );
+  });
+
+  it('Should fail to initiate swap twice', async function () {
+    await appUserNFT.mint(appUserAddress, 189);
+    await appUserNFT.approve(swapKiwi.address, 189);
+    const tx = await appUser.proposeSwap(otherAppUserAddress, [appUserNFT.address], [189], {
+      value: VALID_APP_FEE
+    });
+    const txReceipt = await tx.wait(1);
+    const logs = await getEventWithArgsFromLogs(txReceipt, "SwapProposed");
+    const swapIdFromLogs = Number(logs[logs.length - 2].args.swapId.toString());
+    await otherAppUserNFT.mint(otherAppUserAddress, 302);
+    await otherAppUserNFT.approve(swapKiwi.address, 302);
+    await otherAppUser.initiateSwap(swapIdFromLogs, [otherAppUserNFT.address], [302], {
+      value: VALID_APP_FEE
+    })
+
+
+    await otherAppUserNFT.mint(otherAppUserAddress, 303);
+    await otherAppUserNFT.approve(swapKiwi.address, 303);
+    await expect(otherAppUser.initiateSwap(swapIdFromLogs, [otherAppUserNFT.address], [303], {
+      value: VALID_APP_FEE
+    })).to.be.rejectedWith(
+      "VM Exception while processing transaction: revert SwapKiwi: swap already initiated"
+    );
+  });
+
   it("Should fail to cancel swap if second user already added NFTs", async function () {
     // first user NFT minting and swap deposit into SwapKiwi
     await appUserNFT.mint(appUserAddress, 160);

@@ -105,6 +105,10 @@ contract SwapKiwi is Ownable, IERC721Receiver {
   function initiateSwap(uint256 swapId, address[] memory nftAddresses, uint256[] memory nftIds)
     external payable chargeAppFee requireSameLength(nftAddresses, nftIds) {
       require(_swaps[swapId].secondUser == msg.sender, "SwapKiwi: caller is not swap participator");
+      require(
+        _swaps[swapId].secondUserNftAddresses.length == 0 && _swaps[swapId].secondUserNftIds.length == 0,
+        "SwapKiwi: swap already initiated"
+      );
 
       safeMultipleTransfersFrom(
         msg.sender,
@@ -149,6 +153,8 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     );
 
     emit SwapExecuted(_swaps[swapId].initiator, _swaps[swapId].secondUser, swapId);
+
+    delete _swaps[swapId];
   }
 
   /**
@@ -162,7 +168,6 @@ contract SwapKiwi is Ownable, IERC721Receiver {
       _swaps[swapId].initiator == msg.sender || _swaps[swapId].secondUser == msg.sender,
       "SwapKiwi: Can't cancel swap, must be swap participant"
     );
-
     require(_swaps[swapId].secondUserNftAddresses.length == 0,
       "SwapKiwi: Can't cancel swap after other user added NFTs");
 
@@ -175,6 +180,8 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     );
 
     emit SwapCanceled(msg.sender, swapId);
+
+    delete _swaps[swapId];
   }
 
   /**
@@ -206,6 +213,8 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     );
 
     emit SwapRejected(msg.sender, swapId);
+
+    delete _swaps[swapId];
   }
 
   function safeMultipleTransfersFrom(
