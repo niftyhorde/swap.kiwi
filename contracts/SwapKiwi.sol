@@ -8,8 +8,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract SwapKiwi is Ownable, IERC721Receiver {
 
   uint256 private _swapsCounter;
+  uint256 private collectedFee;
+  uint256 private withdrawnFee;
+
   uint256 public fee;
-  uint256 public collectedFee;
+
   mapping (address => uint256) private _balances;
   mapping (uint256 => Swap) private _swaps;
 
@@ -251,10 +254,12 @@ contract SwapKiwi is Ownable, IERC721Receiver {
   function withdrawEther(address payable recipient, uint256 amount) external onlyOwner {
     require(recipient != address(0), "SwapKiwi: transfer to the zero address");
     require(
-        collectedFee >= amount,
+        collectedFee - withdrawnFee >= amount,
         "SwapKiwi: insufficient ETH in contract"
     );
+
     recipient.transfer(amount);
+    withdrawnFee += amount;
   }
 
   function onERC721Received(
