@@ -55,7 +55,7 @@ contract SwapKiwi is Ownable, IERC721Receiver {
   }
 
   modifier chargeAppFee() {
-    require(msg.value >= fee, "SwapKiwi: Sent ETH amount needs to be more or equal to application fee");
+    require(msg.value >= fee, "SwapKiwi: Sent ETH amount needs to be more or equal application fee");
     _;
   }
 
