@@ -428,7 +428,7 @@ describe("Escrow", async function () {
     await appUserNFT.mint(appUserAddress, 375);
     await appUserNFT.approve(swapKiwi.address, 375);
     const tx = await appUser.proposeSwap(otherAppUserAddress, [appUserNFT.address], [375], {
-      value: VALID_APP_FEE.add(parseEther("100"))
+      value: VALID_APP_FEE.add(parseEther("50"))
     });
     const txReceipt = await tx.wait(1);
     const logs = await getEventWithArgsFromLogs(txReceipt, "SwapProposed");
@@ -441,7 +441,7 @@ describe("Escrow", async function () {
       [otherAppUserNFT.address],
       [376],
       {
-        value: VALID_APP_FEE.add(parseEther("50"))
+        value: VALID_APP_FEE.add(parseEther("25"))
       }
     );
     await initiateSwapTx.wait(1);
@@ -451,8 +451,8 @@ describe("Escrow", async function () {
 
     expect(await appUserNFT.ownerOf(375)).to.be.deep.equal(otherAppUserAddress);
     expect(await otherAppUserNFT.ownerOf(376)).to.be.deep.equal(appUserAddress);
-    expect(firstUserBalance.sub((await appUser.signer.getBalance()).add(parseEther("50"))).lt(parseEther("1"))).to.be.equal(true);
-    expect(secondUserBalance.sub((await otherAppUser.signer.getBalance()).sub(parseEther("50"))).lt(parseEther("1"))).to.be.equal(true);
+    expect(firstUserBalance.sub((await appUser.signer.getBalance()).add(parseEther("25"))).lt(parseEther("1"))).to.be.equal(true);
+    expect(secondUserBalance.sub((await otherAppUser.signer.getBalance()).sub(parseEther("25"))).lt(parseEther("1"))).to.be.equal(true);
   });
 
   it("Should successful withdraw collected fees from SwapKiwi if called by owner", async function () {
