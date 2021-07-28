@@ -9,16 +9,19 @@ contract SwapKiwi is Ownable, IERC721Receiver {
 
   uint256 private _swapsCounter;
   uint256 public fee;
+  uint256 public collectedFee;
   mapping (address => uint256) private _balances;
   mapping (uint256 => Swap) private _swaps;
 
   struct Swap {
-    address initiator;
+    address payable initiator;
     address[] initiatorNftAddresses;
     uint256[] initiatorNftIds;
-    address secondUser;
+    uint256 initiatorEtherValue;
+    address payable secondUser;
     address[] secondUserNftAddresses;
     uint256[] secondUserNftIds;
+    uint256 secondUserEtherValue;
   }
 
   event SwapExecuted(address indexed from, address indexed to, uint256 indexed swapId);
@@ -28,14 +31,16 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     address indexed to,
     uint256 indexed swapId,
     address[] nftAddresses,
-    uint256[] nftIds
+    uint256[] nftIds,
+    uint256 etherValue
   );
   event SwapInitiated(
     address indexed from,
     address indexed to,
     uint256 indexed swapId,
     address[] nftAddresses,
-    uint256[] nftIds
+    uint256[] nftIds,
+    uint256 etherValue
   );
 
   modifier onlyInitiator(uint256 swapId) {
@@ -50,7 +55,7 @@ contract SwapKiwi is Ownable, IERC721Receiver {
   }
 
   modifier chargeAppFee() {
-    require(msg.value == fee, "SwapKiwi: Sent ETH amount needs to equal application fee");
+    require(msg.value >= fee, "SwapKiwi: Sent ETH amount needs to be more or equal to application fee");
     _;
   }
 
@@ -84,12 +89,17 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     );
 
       Swap storage swap = _swaps[_swapsCounter];
-      swap.initiator = msg.sender;
+      swap.initiator = payable(msg.sender);
       swap.initiatorNftAddresses = nftAddresses;
       swap.initiatorNftIds = nftIds;
-      swap.secondUser = secondUser;
+      if (msg.value > fee) {
+        swap.initiatorEtherValue = msg.value - fee;
+      }
+      swap.secondUser = payable(secondUser);
 
-      emit SwapProposed(msg.sender, secondUser, _swapsCounter, nftAddresses, nftIds);
+      collectedFee += fee;
+
+      emit SwapProposed(msg.sender, secondUser, _swapsCounter, nftAddresses, nftIds, swap.initiatorEtherValue);
   }
 
   /**
@@ -118,8 +128,20 @@ contract SwapKiwi is Ownable, IERC721Receiver {
 
       _swaps[swapId].secondUserNftAddresses = nftAddresses;
       _swaps[swapId].secondUserNftIds = nftIds;
+      if (msg.value > fee) {
+        _swaps[swapId].secondUserEtherValue = msg.value - fee;
+      }
 
-      emit SwapInitiated(msg.sender, _swaps[swapId].initiator, swapId, nftAddresses, nftIds);
+      collectedFee += fee;
+
+      emit SwapInitiated(
+        msg.sender,
+        _swaps[swapId].initiator,
+        swapId,
+        nftAddresses,
+        nftIds,
+        _swaps[swapId].secondUserEtherValue
+      );
   }
 
   /**
@@ -150,6 +172,13 @@ contract SwapKiwi is Ownable, IERC721Receiver {
       _swaps[swapId].initiatorNftAddresses,
       _swaps[swapId].initiatorNftIds
     );
+
+    if (_swaps[swapId].initiatorEtherValue != 0) {
+      _swaps[swapId].secondUser.transfer(_swaps[swapId].initiatorEtherValue);
+    }
+    if (_swaps[swapId].secondUserEtherValue != 0) {
+      _swaps[swapId].initiator.transfer(_swaps[swapId].secondUserEtherValue);
+    }
 
     emit SwapExecuted(_swaps[swapId].initiator, _swaps[swapId].secondUser, swapId);
 
@@ -185,6 +214,13 @@ contract SwapKiwi is Ownable, IERC721Receiver {
       );
     }
 
+    if (_swaps[swapId].initiatorEtherValue != 0) {
+      _swaps[swapId].secondUser.transfer(_swaps[swapId].initiatorEtherValue);
+    }
+    if (_swaps[swapId].secondUserEtherValue != 0) {
+      _swaps[swapId].initiator.transfer(_swaps[swapId].secondUserEtherValue);
+    }
+
 
     emit SwapCanceled(msg.sender, swapId);
 
@@ -215,7 +251,7 @@ contract SwapKiwi is Ownable, IERC721Receiver {
   function withdrawEther(address payable recipient, uint256 amount) external onlyOwner {
     require(recipient != address(0), "SwapKiwi: transfer to the zero address");
     require(
-        address(this).balance >= amount,
+        collectedFee >= amount,
         "SwapKiwi: insufficient ETH in contract"
     );
     recipient.transfer(amount);
