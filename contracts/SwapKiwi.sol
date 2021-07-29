@@ -8,8 +8,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract SwapKiwi is Ownable, IERC721Receiver {
 
   uint256 private _swapsCounter;
-  uint256 private collectedFee;
-  uint256 private withdrawnFee;
+  uint256 private _etherLocked;
 
   uint256 public fee;
 
@@ -97,10 +96,10 @@ contract SwapKiwi is Ownable, IERC721Receiver {
       swap.initiatorNftIds = nftIds;
       if (msg.value > fee) {
         swap.initiatorEtherValue = msg.value - fee;
+        _etherLocked += swap.initiatorEtherValue;
       }
       swap.secondUser = payable(secondUser);
 
-      collectedFee += fee;
 
       emit SwapProposed(msg.sender, secondUser, _swapsCounter, nftAddresses, nftIds, swap.initiatorEtherValue);
   }
@@ -133,9 +132,8 @@ contract SwapKiwi is Ownable, IERC721Receiver {
       _swaps[swapId].secondUserNftIds = nftIds;
       if (msg.value > fee) {
         _swaps[swapId].secondUserEtherValue = msg.value - fee;
+        _etherLocked += _swaps[swapId].secondUserEtherValue;
       }
-
-      collectedFee += fee;
 
       emit SwapInitiated(
         msg.sender,
@@ -178,9 +176,11 @@ contract SwapKiwi is Ownable, IERC721Receiver {
 
     if (_swaps[swapId].initiatorEtherValue != 0) {
       _swaps[swapId].secondUser.transfer(_swaps[swapId].initiatorEtherValue);
+      _etherLocked -= _swaps[swapId].initiatorEtherValue;
     }
     if (_swaps[swapId].secondUserEtherValue != 0) {
       _swaps[swapId].initiator.transfer(_swaps[swapId].secondUserEtherValue);
+      _etherLocked -= _swaps[swapId].secondUserEtherValue;
     }
 
     emit SwapExecuted(_swaps[swapId].initiator, _swaps[swapId].secondUser, swapId);
@@ -219,9 +219,11 @@ contract SwapKiwi is Ownable, IERC721Receiver {
 
     if (_swaps[swapId].initiatorEtherValue != 0) {
       _swaps[swapId].secondUser.transfer(_swaps[swapId].initiatorEtherValue);
+      _etherLocked -= _swaps[swapId].initiatorEtherValue;
     }
     if (_swaps[swapId].secondUserEtherValue != 0) {
       _swaps[swapId].initiator.transfer(_swaps[swapId].secondUserEtherValue);
+      _etherLocked -= _swaps[swapId].secondUserEtherValue;
     }
 
 
@@ -254,12 +256,11 @@ contract SwapKiwi is Ownable, IERC721Receiver {
   function withdrawEther(address payable recipient, uint256 amount) external onlyOwner {
     require(recipient != address(0), "SwapKiwi: transfer to the zero address");
     require(
-        collectedFee - withdrawnFee >= amount,
+        address(this).balance - _etherLocked >= amount,
         "SwapKiwi: insufficient ETH in contract"
     );
 
     recipient.transfer(amount);
-    withdrawnFee += amount;
   }
 
   function onERC721Received(
