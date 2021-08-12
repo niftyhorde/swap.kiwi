@@ -219,11 +219,11 @@ contract SwapKiwi is Ownable, IERC721Receiver {
 
     if (_swaps[swapId].initiatorEtherValue != 0) {
       _etherLocked -= _swaps[swapId].initiatorEtherValue;
-      _swaps[swapId].secondUser.transfer(_swaps[swapId].initiatorEtherValue);
+      _swaps[swapId].initiator.transfer(_swaps[swapId].initiatorEtherValue);
     }
     if (_swaps[swapId].secondUserEtherValue != 0) {
       _etherLocked -= _swaps[swapId].secondUserEtherValue;
-      _swaps[swapId].initiator.transfer(_swaps[swapId].secondUserEtherValue);
+      _swaps[swapId].secondUser.transfer(_swaps[swapId].secondUserEtherValue);
     }
 
 
