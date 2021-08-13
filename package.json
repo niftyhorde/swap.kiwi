@@ -57,7 +57,7 @@
     "dotenv": "^8.2.0",
     "env-prompt": "^1.2.3",
     "ethereum-waffle": "^3.3.0",
-    "ethers": "^5.2.0",
+    "ethers": "^5.4.4",
     "hardhat": "2.3.X",
     "hardhat-deploy": "^0.8.8",
     "hardhat-gas-reporter": "^1.0.4",
