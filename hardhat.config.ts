@@ -68,8 +68,6 @@ const config: HardhatUserConfig = {
       accounts: {
         mnemonic: `${process.env.MAINNET_MNEMONIC}`
       },
-      gas: "auto",
-      gasPrice: "auto",
     }
   },
   gasReporter: {
