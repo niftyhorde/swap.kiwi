@@ -117,7 +117,8 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     external payable chargeAppFee requireSameLength(nftAddresses, nftIds) {
       require(_swaps[swapId].secondUser == msg.sender, "SwapKiwi: caller is not swap participator");
       require(
-        _swaps[swapId].secondUserNftAddresses.length == 0 && _swaps[swapId].secondUserNftIds.length == 0,
+        _swaps[swapId].secondUserEtherValue == 0 &&
+        ( _swaps[swapId].secondUserNftAddresses.length == 0 && _swaps[swapId].secondUserNftIds.length == 0),
         "SwapKiwi: swap already initiated"
       );
 
@@ -153,8 +154,9 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     * @param swapId ID of the swap that the initator wants to execute
     */
   function acceptSwap(uint256 swapId) external onlyInitiator(swapId) {
-    require( _swaps[swapId].secondUserNftAddresses.length != 0 &&
-      _swaps[swapId].initiatorNftAddresses.length != 0,
+    require(
+      (_swaps[swapId].secondUserNftAddresses.length != 0 || _swaps[swapId].secondUserEtherValue > 0) &&
+      (_swaps[swapId].initiatorNftAddresses.length != 0 || _swaps[swapId].initiatorEtherValue > 0),
        "SwapKiwi: Can't accept swap, both participants didn't add NFTs"
     );
 
