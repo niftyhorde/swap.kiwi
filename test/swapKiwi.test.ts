@@ -1,9 +1,9 @@
 import { Deployment } from "hardhat-deploy/types";
 import { expect, use } from "chai";
-import hre, { ethers, deployments } from "hardhat";
+import { ethers, deployments } from "hardhat";
 import { SwapKiwi } from "../typechain/SwapKiwi";
 import { TestNFT } from "../typechain/TestNFT";
-import { Contract, Signer } from "ethers";
+import { Signer } from "ethers";
 import { TransactionReceipt } from "@ethersproject/providers";
 import chaiAsPromised from 'chai-as-promised';
 import { parseEther } from "ethers/lib/utils";
@@ -81,7 +81,23 @@ describe("Escrow", async function () {
     const nonOwnerContract = new ethers.Contract(SwapKiwi.address, SwapKiwi.abi, signers[6]) as SwapKiwi;
 
     await expect(nonOwnerContract.setAppFee(1000))
-      .to.be.rejectedWith("VM Exception while processing transaction: revert Ownable: caller is not the owner");
+      .to.be.rejectedWith("Ownable: caller is not the owner");
+  });
+
+  it('Should fail to propose swap with invalid app fee', async function () {
+    await expect(appUser.proposeSwap(otherAppUserAddress, [], [], {
+      value: parseEther("0.01")
+    })).to.be.rejectedWith(
+      "SwapKiwi: Sent ETH amount needs to be more or equal application fee"
+    );
+  });
+
+  it('Should fail to propose swap with different nft address and if length', async function () {
+    await expect(appUser.proposeSwap(otherAppUserAddress, [], [13], {
+      value: VALID_APP_FEE
+    })).to.be.rejectedWith(
+      "SwapKiwi: NFT and ID arrays have to be same length"
+    );
   });
 
   it('Should succesfully deposit NFT into escrow contract and emit "SwapProposed" event', async function () {
@@ -238,7 +254,7 @@ describe("Escrow", async function () {
     expect(await appUserNFT.ownerOf(136)).to.be.deep.equal(otherAppUserAddress);
   });
 
-  it('Should succesfully cancel swap with created with ether value', async function () {
+  it('Should succesfully cancel swap created with ether value', async function () {
     const firstUserBalance = await appUser.signer.getBalance();
     const secondUserBalance = await otherAppUser.signer.getBalance();
 
@@ -291,7 +307,22 @@ describe("Escrow", async function () {
     await expect(otherAppUser.initiateSwap(swapIdFromLogs, [otherAppUserNFT.address], [301], {
       value: VALID_APP_FEE
     })).to.be.rejectedWith(
-      `VM Exception while processing transaction: revert SwapKiwi: caller is not swap participator`
+      `SwapKiwi: caller is not swap participator`
+    );
+  });
+
+  it('Should fail to initiate swap with invalid app fee', async function () {
+    const tx = await appUser.proposeSwap(otherAppUserAddress, [], [], {
+      value: VALID_APP_FEE.add(parseEther("0.1"))
+    });
+    const txReceipt = await tx.wait(1);
+    const logs = await getEventWithArgsFromLogs(txReceipt, "SwapProposed");
+    const swapIdFromLogs = Number(logs.args.swapId.toString());
+
+    await expect(otherAppUser.initiateSwap(swapIdFromLogs, [], [], {
+      value: parseEther("0.01")
+    })).to.be.rejectedWith(
+      `SwapKiwi: Sent ETH amount needs to be more or equal application fee`
     );
   });
 
@@ -316,7 +347,30 @@ describe("Escrow", async function () {
     await expect(otherAppUser.initiateSwap(swapIdFromLogs, [otherAppUserNFT.address], [303], {
       value: VALID_APP_FEE
     })).to.be.rejectedWith(
-      "VM Exception while processing transaction: revert SwapKiwi: swap already initiated"
+      "SwapKiwi: swap already initiated"
+    );
+  });
+
+  it('Should fail to initiate swap twice if proposed only with ether', async function () {
+    await appUserNFT.mint(appUserAddress, 1732);
+    await appUserNFT.approve(swapKiwi.address, 1732);
+    const tx = await appUser.proposeSwap(otherAppUserAddress, [appUserNFT.address], [1732], {
+      value: VALID_APP_FEE
+    });
+    const txReceipt = await tx.wait(1);
+    const logs = await getEventWithArgsFromLogs(txReceipt, "SwapProposed");
+    const swapIdFromLogs = Number(logs.args.swapId.toString());
+    await otherAppUser.initiateSwap(swapIdFromLogs, [], [], {
+      value: VALID_APP_FEE.add(ethers.utils.parseEther("0.25"))
+    })
+
+
+    await otherAppUserNFT.mint(otherAppUserAddress, 1733);
+    await otherAppUserNFT.approve(swapKiwi.address, 1733);
+    await expect(otherAppUser.initiateSwap(swapIdFromLogs, [otherAppUserNFT.address], [1733], {
+      value: VALID_APP_FEE
+    })).to.be.rejectedWith(
+      "SwapKiwi: swap already initiated"
     );
   });
 
@@ -343,7 +397,7 @@ describe("Escrow", async function () {
     expect(await appUserNFT.ownerOf(200)).to.be.deep.equal(appUserAddress);
 
     await expect(appUser.cancelSwap(swapIdFromLogs)).to.be.rejectedWith(
-      "VM Exception while processing transaction: revert SwapKiwi: Can't cancel swap, must be swap participant"
+      "SwapKiwi: Can't cancel swap, must be swap participant"
     );
   });
 
@@ -361,10 +415,50 @@ describe("Escrow", async function () {
     const swapIdFromLogs = Number(logs.args.swapId.toString());
 
     await expect(nonSwapParticipant.cancelSwap(swapIdFromLogs)).to.be.rejectedWith(
-      "VM Exception while processing transaction: revert SwapKiwi: Can't cancel swap, must be swap participant");
+      "SwapKiwi: Can't cancel swap, must be swap participant");
   });
 
-  it('Should successfully execute swap, transfer NFTs from SwapKiwi to new users and emit "swapExecutedEvent" and "swapInitiated" events', async function () {
+  it("Should fail to accept swap if second user didn't add NFTs or ether", async function () {
+    // first user NFT minting and swap deposit into SwapKiwi
+    await appUserNFT.mint(appUserAddress, 2000);
+    await appUserNFT.approve(swapKiwi.address, 2000);
+    const tx = await appUser.proposeSwap(otherAppUserAddress, [appUserNFT.address], [2000], {
+      value: VALID_APP_FEE
+    });
+    const txReceipt = await tx.wait(1);
+    const logs = await getEventWithArgsFromLogs(txReceipt, "SwapProposed");
+    const swapIdFromLogs = Number(logs.args.swapId.toString());
+
+    await expect(appUser.acceptSwap(swapIdFromLogs)).to.be.rejectedWith(
+      "SwapKiwi: Can't accept swap, both participants didn't add NFTs");
+  });
+
+  it('Should fail to accept swap if not swap initiator', async function () {
+    await appUserNFT.mint(appUserAddress, 2100);
+    await appUserNFT.approve(swapKiwi.address, 2100);
+    const tx = await appUser.proposeSwap(otherAppUserAddress, [appUserNFT.address], [2100], {
+      value: VALID_APP_FEE
+    });
+    const txReceipt = await tx.wait(1);
+    const logs = await getEventWithArgsFromLogs(txReceipt, "SwapProposed");
+    const swapIdFromLogs = Number(logs.args.swapId.toString());
+
+    const initiateSwapTx = await otherAppUser.initiateSwap(
+      swapIdFromLogs,
+      [],
+      [],
+      {
+        value: VALID_APP_FEE.add(parseEther("50"))
+      }
+    );
+    await initiateSwapTx.wait(1);
+
+    await expect(otherAppUser.acceptSwap(swapIdFromLogs)).to.be.rejectedWith(
+      "SwapKiwi: caller is not swap initiator"
+    );
+  });
+
+  it('Should successfully execute NFT - NFT swap', async function () {
     // first user NFT minting and swap deposit into SwapKiwi
     await appUserNFT.mint(appUserAddress, 85);
     await appUserNFT.mint(appUserAddress, 86);
@@ -421,7 +515,7 @@ describe("Escrow", async function () {
     expect(await appUserNFT.ownerOf(88)).to.be.deep.equal(appUserAddress);
   });
 
-  it('Should successfully execute swap with ether', async function () {
+  it('Should successfully execute NFT + ether - NFT + ether swap', async function () {
     const firstUserBalance = await appUser.signer.getBalance();
     const secondUserBalance = await otherAppUser.signer.getBalance();
 
@@ -455,16 +549,90 @@ describe("Escrow", async function () {
     expect(secondUserBalance.sub((await otherAppUser.signer.getBalance()).sub(parseEther("25"))).lt(parseEther("1"))).to.be.equal(true);
   });
 
-  it("Should successful withdraw collected fees from SwapKiwi if called by owner", async function () {
+  it('Should successfully execute ether - NFT swap', async function () {
+    const secondUserBalance = await otherAppUser.signer.getBalance();
+
+    const tx = await appUser.proposeSwap(otherAppUserAddress, [], [], {
+      value: VALID_APP_FEE.add(parseEther("50"))
+    });
+    const txReceipt = await tx.wait(1);
+    const logs = await getEventWithArgsFromLogs(txReceipt, "SwapProposed");
+    const swapIdFromLogs = Number(logs.args.swapId.toString());
+
+    await otherAppUserNFT.mint(otherAppUserAddress, 1800);
+    await otherAppUserNFT.approve(swapKiwi.address, 1800);
+    const initiateSwapTx = await otherAppUser.initiateSwap(
+      swapIdFromLogs,
+      [otherAppUserNFT.address],
+      [1800],
+      {
+        value: VALID_APP_FEE
+      }
+    );
+    await initiateSwapTx.wait(1);
+
+    const acceptSwapTx = await appUser.acceptSwap(swapIdFromLogs);
+    await acceptSwapTx.wait(1);
+
+    expect(await otherAppUserNFT.ownerOf(1800)).to.be.deep.equal(appUserAddress);
+    expect(
+      (
+        await otherAppUser.signer.getBalance()
+      ).sub(secondUserBalance).sub(parseEther("50")).lt(parseEther("1"))).to.be.equal(true);
+  });
+
+  it('Should successfully execute NFT - ether swap', async function () {
+    const firstUserBalance = await appUser.signer.getBalance();
+
+    await appUserNFT.mint(appUserAddress, 1822);
+    await appUserNFT.approve(swapKiwi.address, 1822);
+    const tx = await appUser.proposeSwap(otherAppUserAddress, [appUserNFT.address], [1822], {
+      value: VALID_APP_FEE
+    });
+    const txReceipt = await tx.wait(1);
+    const logs = await getEventWithArgsFromLogs(txReceipt, "SwapProposed");
+    const swapIdFromLogs = Number(logs.args.swapId.toString());
+
+    const initiateSwapTx = await otherAppUser.initiateSwap(
+      swapIdFromLogs,
+      [],
+      [],
+      {
+        value: VALID_APP_FEE.add(parseEther("50"))
+      }
+    );
+    await initiateSwapTx.wait(1);
+
+    const acceptSwapTx = await appUser.acceptSwap(swapIdFromLogs);
+    await acceptSwapTx.wait(1);
+
+    expect(await appUserNFT.ownerOf(1822)).to.be.deep.equal(otherAppUserAddress);
+    expect(
+      (
+        await appUser.signer.getBalance()
+      ).sub(firstUserBalance).sub(parseEther("50")).lt(parseEther("1"))).to.be.equal(true);
+  });
+
+  it("Should successfully withdraw collected fees if called by owner", async function () {
     await swapKiwi.withdrawEther(appUserNFT.address, ethers.utils.parseEther("0.1"));
 
     expect((await ethers.provider.getBalance(appUserNFT.address)).toString())
       .to.be.deep.equal(ethers.utils.parseEther("0.1").toString());
   });
 
-  it("Should fail to withdraw collected fees from SwapKiwi if not owner", async function () {
+  it("Should fail to withdraw collected fees if not owner", async function () {
     await expect(appUser.withdrawEther(appUser.address, ethers.utils.parseEther("1.0")))
       .to.be.rejectedWith(
-        "VM Exception while processing transaction: revert Ownable: caller is not the owner");
+        "Ownable: caller is not the owner");
+  });
+
+  it("Should fail to withdraw collected fees if sent to zero address", async function () {
+    await expect(swapKiwi.withdrawEther("0x0000000000000000000000000000000000000000", ethers.utils.parseEther("1.0")))
+      .to.be.rejectedWith("SwapKiwi: transfer to the zero address");
+  });
+
+  it("Should fail to withdraw more funds that collected", async function () {
+    await expect(swapKiwi.withdrawEther(appUserAddress, ethers.utils.parseEther("10000")))
+      .to.be.rejectedWith("SwapKiwi: insufficient ETH in contract");
   });
 });
