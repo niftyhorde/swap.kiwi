@@ -261,7 +261,7 @@ describe("Escrow", async function () {
     await appUserNFT.mint(appUserAddress, 430);
     await appUserNFT.approve(swapKiwi.address, 430);
     const tx = await appUser.proposeSwap(otherAppUserAddress, [appUserNFT.address], [430], {
-      value: VALID_APP_FEE.add(parseEther("50"))
+      value: VALID_APP_FEE.add(parseEther("20"))
     });
     const txReceipt = await tx.wait(1);
     const logs = await getEventWithArgsFromLogs(txReceipt, "SwapProposed");
@@ -274,7 +274,7 @@ describe("Escrow", async function () {
       [otherAppUserNFT.address],
       [431],
       {
-        value: VALID_APP_FEE.add(parseEther("50"))
+        value: VALID_APP_FEE.add(parseEther("10"))
       }
     );
     const initiateSwapTxReceipt = await initiateSwapTx.wait(1);

@@ -8,4 +8,10 @@ const deployFunc: DeployFunction = async function (hre: HardhatRuntimeEnvironmen
 
   await deploy("TestNFT", {from: deployer});
 }
+
+// skip deployment if deploying to mainnet
+deployFunc.skip = async (hre: HardhatRuntimeEnvironment) => {
+  return hre.network.name === 'mainnet'
+};
+
 export default deployFunc;
