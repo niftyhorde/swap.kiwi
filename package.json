@@ -31,6 +31,7 @@
     "deploy:local": "concurrently --raw --kill-others --success first \"hardhat node\" \"yarn deploy:localhost\"",
     "deploy:goerli": "hardhat deploy --network goerli",
     "deploy:ropsten": "hardhat deploy --network ropsten",
+    "deploy:rinkeby": "hardhat deploy --network rinkeby",
     "deploy:mainnet": "hardhat deploy --network mainnet",
     "help": "npx hardhat help",
     "node:local": "npx hardhat node",

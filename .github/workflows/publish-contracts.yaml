@@ -59,6 +59,11 @@ jobs:
         env:
           INFURA_PROJECT_ID: ${{ secrets.INFURA_PROJECT_ID }}
           ROPSTEN_MNEMONIC: ${{ secrets.ROPSTEN_MNEMONIC }}
+      - name: Deploy rinkeby
+        run: yarn run deploy:rinkeby
+        env:
+          INFURA_PROJECT_ID: ${{ secrets.INFURA_PROJECT_ID }}
+          RINKEBY_MNEMONIC: ${{ secrets.RINKEBY_MNEMONIC }}
       - name: Deploy mainnet
         run: yarn run deploy:mainnet
         if: ${{ !contains(needs.tag.outputs.tag, 'beta') }}
