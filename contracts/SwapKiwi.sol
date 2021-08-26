@@ -255,14 +255,10 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     IERC721(tokenAddress).safeTransferFrom(from, to, tokenId, _data);
   }
 
-  function withdrawEther(address payable recipient, uint256 amount) external onlyOwner {
+  function withdrawEther(address payable recipient) external onlyOwner {
     require(recipient != address(0), "SwapKiwi: transfer to the zero address");
-    require(
-        address(this).balance - _etherLocked >= amount,
-        "SwapKiwi: insufficient ETH in contract"
-    );
 
-    recipient.transfer(amount);
+    recipient.transfer((address(this).balance - _etherLocked));
   }
 
   function onERC721Received(

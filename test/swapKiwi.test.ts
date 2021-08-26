@@ -613,26 +613,56 @@ describe("Escrow", async function () {
       ).sub(firstUserBalance).sub(parseEther("50")).lt(parseEther("1"))).to.be.equal(true);
   });
 
-  it("Should successfully withdraw collected fees if called by owner", async function () {
-    await swapKiwi.withdrawEther(appUserNFT.address, ethers.utils.parseEther("0.1"));
+  it("Should successfully withdraw only collected fees", async function () {
+    await swapKiwi.withdrawEther(await signers[7].getAddress());
+
+    const tx1 = await appUser.proposeSwap(otherAppUserAddress, [], [], {
+      value: VALID_APP_FEE.add(ethers.utils.parseEther("1"))
+    });
+    const txReceipt1 = await tx1.wait(1);
+    const logs1 = await getEventWithArgsFromLogs(txReceipt1, "SwapProposed");
+    const swapIdFromLogs1 = Number(logs1.args.swapId.toString());
+    const initiateSwapTx1 = await otherAppUser.initiateSwap(
+      swapIdFromLogs1,
+      [],
+      [],
+      {
+        value: VALID_APP_FEE.add(parseEther("5"))
+      }
+    );
+    await initiateSwapTx1.wait(1);
+    const acceptSwapTx1 = await appUser.acceptSwap(swapIdFromLogs1);
+    await acceptSwapTx1.wait(1);
+    const tx2 = await appUser.proposeSwap(otherAppUserAddress, [], [], {
+      value: VALID_APP_FEE.add(ethers.utils.parseEther("1"))
+    });
+    const txReceipt2 = await tx2.wait(1);
+    const logs2 = await getEventWithArgsFromLogs(txReceipt2, "SwapProposed");
+    const swapIdFromLogs = Number(logs2.args.swapId.toString());
+    const initiateSwapTx2 = await otherAppUser.initiateSwap(
+      swapIdFromLogs,
+      [],
+      [],
+      {
+        value: VALID_APP_FEE.add(parseEther("5"))
+      }
+    );
+    await initiateSwapTx2.wait(1);
+
+    await swapKiwi.withdrawEther(appUserNFT.address)
 
     expect((await ethers.provider.getBalance(appUserNFT.address)).toString())
-      .to.be.deep.equal(ethers.utils.parseEther("0.1").toString());
+      .to.be.deep.equal(VALID_APP_FEE.mul(4).toString())
   });
 
   it("Should fail to withdraw collected fees if not owner", async function () {
-    await expect(appUser.withdrawEther(appUser.address, ethers.utils.parseEther("1.0")))
+    await expect(appUser.withdrawEther(appUser.address))
       .to.be.rejectedWith(
         "Ownable: caller is not the owner");
   });
 
   it("Should fail to withdraw collected fees if sent to zero address", async function () {
-    await expect(swapKiwi.withdrawEther("0x0000000000000000000000000000000000000000", ethers.utils.parseEther("1.0")))
+    await expect(swapKiwi.withdrawEther("0x0000000000000000000000000000000000000000"))
       .to.be.rejectedWith("SwapKiwi: transfer to the zero address");
-  });
-
-  it("Should fail to withdraw more funds that collected", async function () {
-    await expect(swapKiwi.withdrawEther(appUserAddress, ethers.utils.parseEther("10000")))
-      .to.be.rejectedWith("SwapKiwi: insufficient ETH in contract");
   });
 });
