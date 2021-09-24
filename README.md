@@ -1,12 +1,8 @@
 # SWAP.KIWI
 
-## Deploying to mainnet (required `env` config)
-### `MAINNET_DEPLOYMENT_GAS_PRICE`
-- value in gwei which will be used for deploying **only** to mainnet (for other networks `auto` gas price is used)
-### `CONTRACT_OWNER_ADDRESS`
-- address of the contract owner on mainnet (for other networks contract owner is `deployer`
-- on deployment ownership is automatically transferred from deployer to this address
-## Swap flow
+Simple. Safe. Reliable. Your NFT swapping platform.
+
+## Smart contract flow for swapping
 
 1. First user starts a swap by calling `proposeSwap` and providing the address of the second user he wants to trade with and arrays of NFT addresses and IDs he wants to trade -> NFTs transferred to `SwapKiwi` contract
 
@@ -18,17 +14,19 @@ cancel it by calling `cancelSwap` -> NFTs transferred back to swap initiator</br
 OR
  reject the swap entirely by calling `rejectSwap` -> NFTs transferred from `SwapKiwi` to their owners
 
-## Requirements
+## Contribution
+
+### Requirements
 
 Following software is required to be installed to use this repo:
-* [NodeJS](https://nodejs.org/en/) >= v12.0.0
+* [NodeJS](https://nodejs.org/en/) >= v14.0.0
 
-This repo also uses dependencies that are associated with `buidler` but not built-in:
-* [buidler-deploy](https://github.com/wighawag/buidler-deploy)
-* [buidler-gas-reporter](https://github.com/cgewecke/buidler-gas-reporter/tree/master)
-* [buidler-typechain](https://github.com/rhlsthrm/buidler-typechain)
+This repo also uses dependencies that are associated with [Hardhat](https://hardhat.org) but not built-in. Third
+-party plugins:
+* [hardhat-deploy](https://github.com/wighawag/hardhat-deploy)
+* [hardhat-gas-reporter](https://github.com/cgewecke/hardhat-gas-reporter)
 
-## Usage
+### Usage
 
 On first use of this repo, run `yarn install` to install all required dependencies.
 Then run `yarn run build` to set up the repo.
@@ -50,3 +48,11 @@ Run `yarn run help` to see all available commands:
 * `test:gas` - Runs gas check
 * `test:coverage` - Runs solidity coverage
 * `typechain` - Generate Typechain typings for compiled contracts
+
+### Deployment
+
+Please check `.env.sample` and populate the required variables in the `.env` file.
+
+- `CONTRACT_OWNER_ADDRESS`
+  - address of the contract owner on mainnet (for other networks contract owner is `deployer`)
+  - on deployment, ownership is automatically transferred from deployer to this address
