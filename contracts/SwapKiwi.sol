@@ -14,7 +14,6 @@ contract SwapKiwi is Ownable, IERC721Receiver {
 
   uint256 public fee;
 
-  mapping (address => uint256) private _balances;
   mapping (uint256 => Swap) private _swaps;
 
   struct Swap {
