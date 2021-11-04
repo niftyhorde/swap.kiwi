@@ -45,6 +45,9 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     uint256[] nftIds,
     uint256 etherValue
   );
+  event AppFeeChanged(
+    uint256 indexed fee
+  );
 
   modifier onlyInitiator(uint256 swapId) {
     require(msg.sender == _swaps[swapId].initiator,
@@ -67,8 +70,9 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     super.transferOwnership(contractOwnerAddress);
   }
 
-  function setAppFee(uint newFee) public onlyOwner {
+  function setAppFee(uint newFee) external onlyOwner {
     fee = newFee;
+    emit AppFeeChanged(newFee);
   }
 
   /**
