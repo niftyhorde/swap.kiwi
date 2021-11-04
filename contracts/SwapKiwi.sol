@@ -14,7 +14,6 @@ contract SwapKiwi is Ownable, IERC721Receiver {
 
   uint256 public fee;
 
-  mapping (address => uint256) private _balances;
   mapping (uint256 => Swap) private _swaps;
 
   struct Swap {
@@ -46,6 +45,9 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     uint256[] nftIds,
     uint256 etherValue
   );
+  event AppFeeChanged(
+    uint256 fee
+  );
 
   modifier onlyInitiator(uint256 swapId) {
     require(msg.sender == _swaps[swapId].initiator,
@@ -68,8 +70,9 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     super.transferOwnership(contractOwnerAddress);
   }
 
-  function setAppFee(uint newFee) public onlyOwner {
+  function setAppFee(uint newFee) external onlyOwner {
     fee = newFee;
+    emit AppFeeChanged(newFee);
   }
 
   /**
@@ -180,11 +183,15 @@ contract SwapKiwi is Ownable, IERC721Receiver {
 
     if (_swaps[swapId].initiatorEtherValue != 0) {
       _etherLocked -= _swaps[swapId].initiatorEtherValue;
-      _swaps[swapId].secondUser.transfer(_swaps[swapId].initiatorEtherValue);
+      uint amountToTransfer = _swaps[swapId].initiatorEtherValue;
+      _swaps[swapId].initiatorEtherValue = 0;
+      _swaps[swapId].secondUser.transfer(amountToTransfer);
     }
     if (_swaps[swapId].secondUserEtherValue != 0) {
       _etherLocked -= _swaps[swapId].secondUserEtherValue;
-      _swaps[swapId].initiator.transfer(_swaps[swapId].secondUserEtherValue);
+      uint amountToTransfer = _swaps[swapId].secondUserEtherValue;
+      _swaps[swapId].secondUserEtherValue = 0;
+      _swaps[swapId].initiator.transfer(amountToTransfer);
     }
 
     emit SwapExecuted(_swaps[swapId].initiator, _swaps[swapId].secondUser, swapId);
@@ -223,13 +230,16 @@ contract SwapKiwi is Ownable, IERC721Receiver {
 
     if (_swaps[swapId].initiatorEtherValue != 0) {
       _etherLocked -= _swaps[swapId].initiatorEtherValue;
-      _swaps[swapId].initiator.transfer(_swaps[swapId].initiatorEtherValue);
+      uint amountToTransfer = _swaps[swapId].initiatorEtherValue;
+      _swaps[swapId].initiatorEtherValue = 0;
+      _swaps[swapId].initiator.transfer(amountToTransfer);
     }
     if (_swaps[swapId].secondUserEtherValue != 0) {
       _etherLocked -= _swaps[swapId].secondUserEtherValue;
-      _swaps[swapId].secondUser.transfer(_swaps[swapId].secondUserEtherValue);
+      uint amountToTransfer = _swaps[swapId].secondUserEtherValue;
+      _swaps[swapId].secondUserEtherValue = 0;
+      _swaps[swapId].secondUser.transfer(amountToTransfer);
     }
-
 
     emit SwapCanceled(msg.sender, swapId);
 
