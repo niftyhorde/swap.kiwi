@@ -46,7 +46,7 @@ contract SwapKiwi is Ownable, IERC721Receiver {
     uint256 etherValue
   );
   event AppFeeChanged(
-    uint256 indexed fee
+    uint256 fee
   );
 
   modifier onlyInitiator(uint256 swapId) {
