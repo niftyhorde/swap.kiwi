@@ -101,9 +101,9 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
         uint256[] memory nftIds,
         uint256[] memory nftAmounts
     ) external payable chargeAppFee requireSameLength(nftAddresses, nftIds, nftAmounts) {
-        _swapsCounter += 1;
+		_swapsCounter += 1;
 
-        safeMultipleTransfersFrom(
+		safeMultipleTransfersFrom(
 			msg.sender,
 			address(this),
 			nftAddresses,
@@ -111,18 +111,18 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
 			nftAmounts
 		);
 
-        Swap storage swap = _swaps[_swapsCounter];
-        swap.initiator = payable(msg.sender);
-        swap.initiatorNftAddresses = nftAddresses;
-        swap.initiatorNftIds = nftIds;
+		Swap storage swap = _swaps[_swapsCounter];
+		swap.initiator = payable(msg.sender);
+		swap.initiatorNftAddresses = nftAddresses;
+		swap.initiatorNftIds = nftIds;
 		swap.initiatorNftAmounts = nftAmounts;
-        if (msg.value > fee) {
+		if (msg.value > fee) {
 			swap.initiatorEtherValue = uint128(msg.value) - fee;
 			_etherLocked += swap.initiatorEtherValue;
-        }
-        swap.secondUser = payable(secondUser);
+		}
+		swap.secondUser = payable(secondUser);
 
-        emit SwapProposed(
+		emit SwapProposed(
 			msg.sender,
 			secondUser,
 			_swapsCounter,
