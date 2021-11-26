@@ -14,13 +14,13 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 */
 contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
 
-    uint64 private _swapsCounter;
-    uint128 private _etherLocked;
-    uint128 public fee;
+	uint64 private _swapsCounter;
+	uint128 private _etherLocked;
+	uint128 public fee;
 
-    mapping (uint64 => Swap) private _swaps;
+	mapping (uint64 => Swap) private _swaps;
 
-    struct Swap {
+	struct Swap {
 		address payable initiator;
 		address[] initiatorNftAddresses;
 		uint256[] initiatorNftIds;
@@ -31,11 +31,11 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
 		uint256[] secondUserNftAmounts;
 		uint128 initiatorEtherValue;
 		uint128 secondUserEtherValue;
-    }
+	}
 
-    event SwapExecuted(address indexed from, address indexed to, uint64 indexed swapId);
-    event SwapCanceled(address indexed canceledBy, uint64 indexed swapId);
-    event SwapProposed(
+	event SwapExecuted(address indexed from, address indexed to, uint64 indexed swapId);
+	event SwapCanceled(address indexed canceledBy, uint64 indexed swapId);
+	event SwapProposed(
 		address indexed from,
 		address indexed to,
 		uint64 indexed swapId,
@@ -43,8 +43,8 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
 		address[] nftAddresses,
 		uint256[] nftIds,
 		uint256[] nftAmounts
-    );
-    event SwapInitiated(
+	);
+	event SwapInitiated(
 		address indexed from,
 		address indexed to,
 		uint64 indexed swapId,
@@ -52,39 +52,39 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
 		address[] nftAddresses,
 		uint256[] nftIds,
 		uint256[] nftAmounts
-    );
-    event AppFeeChanged(
-      	uint128 fee
-    );
+	);
+	event AppFeeChanged(
+		uint128 fee
+	);
 
-    modifier onlyInitiator(uint64 swapId) {
+	modifier onlyInitiator(uint64 swapId) {
 		require(msg.sender == _swaps[swapId].initiator,
 			"SwapKiwi: caller is not swap initiator");
 		_;
-    }
+	}
 
-    modifier requireSameLength(address[] memory nftAddresses, uint256[] memory nftIds, uint256[] memory nftAmounts) {
+	modifier requireSameLength(address[] memory nftAddresses, uint256[] memory nftIds, uint256[] memory nftAmounts) {
 		require(nftAddresses.length == nftIds.length, "SwapKiwi: NFT and ID arrays have to be same length");
 		require(nftAddresses.length == nftAmounts.length, "SwapKiwi: NFT and AMOUNT arrays have to be same length");
 		_;
-    }
+	}
 
-    modifier chargeAppFee() {
+	modifier chargeAppFee() {
 		require(msg.value >= fee, "SwapKiwi: Sent ETH amount needs to be more or equal application fee");
 		_;
-    }
+	}
 
-    constructor(uint128 initalAppFee, address contractOwnerAddress) {
+	constructor(uint128 initalAppFee, address contractOwnerAddress) {
 		fee = initalAppFee;
 		super.transferOwnership(contractOwnerAddress);
-    }
+	}
 
-    function setAppFee(uint128 newFee) external onlyOwner {
+	function setAppFee(uint128 newFee) external onlyOwner {
 		fee = newFee;
 		emit AppFeeChanged(newFee);
-    }
+	}
 
-    /**
+	/**
 	* @dev First user proposes a swap to the second user with the NFTs that he deposits and wants to trade.
 	*      Proposed NFTs are transfered to the SwapKiwi contract and
 	*      kept there until the swap is accepted or canceled/rejected.
@@ -95,12 +95,12 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
 	* @param nftAmounts array of NFT amounts that want to be traded. If the amount is zero, that means 
 	* the token is ERC721 token. Otherwise the token is ERC1155 token.
 	*/
-    function proposeSwap(
-        address secondUser,
-        address[] memory nftAddresses,
-        uint256[] memory nftIds,
-        uint256[] memory nftAmounts
-    ) external payable chargeAppFee requireSameLength(nftAddresses, nftIds, nftAmounts) {
+	function proposeSwap(
+		address secondUser,
+		address[] memory nftAddresses,
+		uint256[] memory nftIds,
+		uint256[] memory nftAmounts
+	) external payable chargeAppFee requireSameLength(nftAddresses, nftIds, nftAmounts) {
 		_swapsCounter += 1;
 
 		safeMultipleTransfersFrom(
@@ -131,7 +131,7 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
 			nftIds,
 			nftAmounts
 		);
-    }
+	}
 
 	/**
 	* @dev Second user accepts the swap (with proposed NFTs) from swap initiator and
