@@ -11,7 +11,7 @@ const deployFunc: DeployFunction = async function (hre: HardhatRuntimeEnvironmen
 
   const initialAppFee = ethers.utils.parseEther(process.env.SWAP_KIWI_FEE ?? "0.0025");
 
-  if (hre.network.name === 'mainnet') {
+  if (hre.network.name === 'mainnet' && process.env.DEPLOY_V1 === 'true') {
     contractOwnerAddress = process.env.CONTRACT_OWNER_ADDRESS;
 
     if (!contractOwnerAddress) {
@@ -23,7 +23,7 @@ const deployFunc: DeployFunction = async function (hre: HardhatRuntimeEnvironmen
         contractOwnerAddress
       ],
     });
-  } else {
+  } else if (hre.network.name != 'mainnet') {
     contractOwnerAddress = deployer;
     await deploy("SwapKiwiV1", {
       from: deployer, args: [
