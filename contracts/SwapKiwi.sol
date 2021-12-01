@@ -116,8 +116,11 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
 		swap.initiatorNftAddresses = nftAddresses;
 		swap.initiatorNftIds = nftIds;
 		swap.initiatorNftAmounts = nftAmounts;
-		if (msg.value > fee) {
-			swap.initiatorEtherValue = uint128(msg.value) - fee;
+
+		uint128 _fee = fee;
+
+		if (msg.value > _fee) {
+			swap.initiatorEtherValue = uint128(msg.value) - _fee;
 			_etherLocked += swap.initiatorEtherValue;
 		}
 		swap.secondUser = payable(secondUser);
@@ -171,8 +174,10 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
 		_swaps[swapId].secondUserNftIds = nftIds;
 		_swaps[swapId].secondUserNftAmounts = nftAmounts;
 
-		if (msg.value > fee) {
-			_swaps[swapId].secondUserEtherValue = uint128(msg.value) - fee;
+		uint128 _fee = fee;
+
+		if (msg.value > _fee) {
+			_swaps[swapId].secondUserEtherValue = uint128(msg.value) - _fee;
 			_etherLocked += _swaps[swapId].secondUserEtherValue;
 		}
 
