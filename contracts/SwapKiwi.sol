@@ -2,285 +2,326 @@
 
 pragma solidity ^0.8.1;
 
-import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
+import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract SwapKiwi is Ownable, IERC721Receiver {
+/**
+* @title This is the contract which added erc1155 into the previous swap contract.
+*/
+contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
 
-  uint256 private _swapsCounter;
-  uint256 private _etherLocked;
+	uint64 private _swapsCounter;
+	uint128 private _etherLocked;
+	uint128 public fee;
 
-  uint256 public fee;
+	mapping (uint64 => Swap) private _swaps;
 
-  mapping (uint256 => Swap) private _swaps;
+	struct Swap {
+		address payable initiator;
+		address[] initiatorNftAddresses;
+		uint256[] initiatorNftIds;
+		uint256[] initiatorNftAmounts;
+		address payable secondUser;
+		address[] secondUserNftAddresses;
+		uint256[] secondUserNftIds;
+		uint256[] secondUserNftAmounts;
+		uint128 initiatorEtherValue;
+		uint128 secondUserEtherValue;
+	}
 
-  struct Swap {
-    address payable initiator;
-    address[] initiatorNftAddresses;
-    uint256[] initiatorNftIds;
-    uint256 initiatorEtherValue;
-    address payable secondUser;
-    address[] secondUserNftAddresses;
-    uint256[] secondUserNftIds;
-    uint256 secondUserEtherValue;
-  }
+	event SwapExecuted(address indexed from, address indexed to, uint64 indexed swapId);
+	event SwapCanceled(address indexed canceledBy, uint64 indexed swapId);
+	event SwapProposed(
+		address indexed from,
+		address indexed to,
+		uint64 indexed swapId,
+		uint128 etherValue,
+		address[] nftAddresses,
+		uint256[] nftIds,
+		uint256[] nftAmounts
+	);
+	event SwapInitiated(
+		address indexed from,
+		address indexed to,
+		uint64 indexed swapId,
+		uint128 etherValue,
+		address[] nftAddresses,
+		uint256[] nftIds,
+		uint256[] nftAmounts
+	);
+	event AppFeeChanged(
+		uint128 fee
+	);
 
-  event SwapExecuted(address indexed from, address indexed to, uint256 indexed swapId);
-  event SwapCanceled(address indexed canceledBy, uint256 indexed swapId);
-  event SwapProposed(
-    address indexed from,
-    address indexed to,
-    uint256 indexed swapId,
-    address[] nftAddresses,
-    uint256[] nftIds,
-    uint256 etherValue
-  );
-  event SwapInitiated(
-    address indexed from,
-    address indexed to,
-    uint256 indexed swapId,
-    address[] nftAddresses,
-    uint256[] nftIds,
-    uint256 etherValue
-  );
-  event AppFeeChanged(
-    uint256 fee
-  );
+	modifier onlyInitiator(uint64 swapId) {
+		require(msg.sender == _swaps[swapId].initiator,
+			"SwapKiwi: caller is not swap initiator");
+		_;
+	}
 
-  modifier onlyInitiator(uint256 swapId) {
-    require(msg.sender == _swaps[swapId].initiator,
-      "SwapKiwi: caller is not swap initiator");
-    _;
-  }
+	modifier requireSameLength(address[] memory nftAddresses, uint256[] memory nftIds, uint256[] memory nftAmounts) {
+		require(nftAddresses.length == nftIds.length, "SwapKiwi: NFT and ID arrays have to be same length");
+		require(nftAddresses.length == nftAmounts.length, "SwapKiwi: NFT and AMOUNT arrays have to be same length");
+		_;
+	}
 
-  modifier requireSameLength(address[] memory nftAddresses, uint256[] memory nftIds) {
-    require(nftAddresses.length == nftIds.length, "SwapKiwi: NFT and ID arrays have to be same length");
-    _;
-  }
+	modifier chargeAppFee() {
+		require(msg.value >= fee, "SwapKiwi: Sent ETH amount needs to be more or equal application fee");
+		_;
+	}
 
-  modifier chargeAppFee() {
-    require(msg.value >= fee, "SwapKiwi: Sent ETH amount needs to be more or equal application fee");
-    _;
-  }
+	constructor(uint128 initalAppFee, address contractOwnerAddress) {
+		fee = initalAppFee;
+		super.transferOwnership(contractOwnerAddress);
+	}
 
-  constructor(uint256 initalAppFee, address contractOwnerAddress) {
-    fee = initalAppFee;
-    super.transferOwnership(contractOwnerAddress);
-  }
+	function setAppFee(uint128 newFee) external onlyOwner {
+		fee = newFee;
+		emit AppFeeChanged(newFee);
+	}
 
-  function setAppFee(uint newFee) external onlyOwner {
-    fee = newFee;
-    emit AppFeeChanged(newFee);
-  }
+	/**
+	* @dev First user proposes a swap to the second user with the NFTs that he deposits and wants to trade.
+	*      Proposed NFTs are transfered to the SwapKiwi contract and
+	*      kept there until the swap is accepted or canceled/rejected.
+	*
+	* @param secondUser address of the user that the first user wants to trade NFTs with
+	* @param nftAddresses array of NFT addressed that want to be traded
+	* @param nftIds array of IDs belonging to NFTs that want to be traded
+	* @param nftAmounts array of NFT amounts that want to be traded. If the amount is zero, that means 
+	* the token is ERC721 token. Otherwise the token is ERC1155 token.
+	*/
+	function proposeSwap(
+		address secondUser,
+		address[] memory nftAddresses,
+		uint256[] memory nftIds,
+		uint256[] memory nftAmounts
+	) external payable chargeAppFee requireSameLength(nftAddresses, nftIds, nftAmounts) {
+		_swapsCounter += 1;
 
-  /**
-    * @dev First user proposes a swap to the second user with the NFTs that he deposits and wants to trade.
-    *      Proposed NFTs are transfered to the SwapKiwi contract and
-    *      kept there until the swap is accepted or canceled/rejected.
-    *
-    * @param secondUser address of the user that the first user wants to trade NFTs with
-    * @param nftAddresses array of NFT addressed that want to be traded
-    * @param nftIds array of IDs belonging to NFTs that want to be traded
-    */
-  function proposeSwap(address secondUser, address[] memory nftAddresses, uint256[] memory nftIds)
-    external payable chargeAppFee requireSameLength(nftAddresses, nftIds) {
-      _swapsCounter += 1;
+		safeMultipleTransfersFrom(
+			msg.sender,
+			address(this),
+			nftAddresses,
+			nftIds,
+			nftAmounts
+		);
 
-      safeMultipleTransfersFrom(
-        msg.sender,
-        address(this),
-        nftAddresses,
-        nftIds
-    );
+		Swap storage swap = _swaps[_swapsCounter];
+		swap.initiator = payable(msg.sender);
+		swap.initiatorNftAddresses = nftAddresses;
+		swap.initiatorNftIds = nftIds;
+		swap.initiatorNftAmounts = nftAmounts;
 
-      Swap storage swap = _swaps[_swapsCounter];
-      swap.initiator = payable(msg.sender);
-      swap.initiatorNftAddresses = nftAddresses;
-      swap.initiatorNftIds = nftIds;
-      if (msg.value > fee) {
-        swap.initiatorEtherValue = msg.value - fee;
-        _etherLocked += swap.initiatorEtherValue;
-      }
-      swap.secondUser = payable(secondUser);
+		uint128 _fee = fee;
 
+		if (msg.value > _fee) {
+			swap.initiatorEtherValue = uint128(msg.value) - _fee;
+			_etherLocked += swap.initiatorEtherValue;
+		}
+		swap.secondUser = payable(secondUser);
 
-      emit SwapProposed(msg.sender, secondUser, _swapsCounter, nftAddresses, nftIds, swap.initiatorEtherValue);
-  }
+		emit SwapProposed(
+			msg.sender,
+			secondUser,
+			_swapsCounter,
+			swap.initiatorEtherValue,
+			nftAddresses,
+			nftIds,
+			nftAmounts
+		);
+	}
 
-  /**
-    * @dev Second user accepts the swap (with proposed NFTs) from swap initiator and
-    *      deposits his NFTs into the SwapKiwi contract.
-    *      Callable only by second user that is invited by swap initiator.
-    *
-    * @param swapId ID of the swap that the second user is invited to participate in
-    * @param nftAddresses array of NFT addressed that want to be traded
-    * @param nftIds array of IDs belonging to NFTs that want to be traded
-    */
-  function initiateSwap(uint256 swapId, address[] memory nftAddresses, uint256[] memory nftIds)
-    external payable chargeAppFee requireSameLength(nftAddresses, nftIds) {
-      require(_swaps[swapId].secondUser == msg.sender, "SwapKiwi: caller is not swap participator");
-      require(
-        _swaps[swapId].secondUserEtherValue == 0 &&
-        ( _swaps[swapId].secondUserNftAddresses.length == 0 && _swaps[swapId].secondUserNftIds.length == 0),
-        "SwapKiwi: swap already initiated"
-      );
+	/**
+	* @dev Second user accepts the swap (with proposed NFTs) from swap initiator and
+	*      deposits his NFTs into the SwapKiwi contract.
+	*      Callable only by second user that is invited by swap initiator.
+	*
+	* @param swapId ID of the swap that the second user is invited to participate in
+	* @param nftAddresses array of NFT addressed that want to be traded
+	* @param nftIds array of IDs belonging to NFTs that want to be traded
+	* @param nftAmounts array of NFT amounts that want to be traded. If the amount is zero, that means 
+	* the token is ERC721 token. Otherwise the token is ERC1155 token.
+	*/
+	function initiateSwap(
+		uint64 swapId,
+		address[] memory nftAddresses,
+		uint256[] memory nftIds,
+		uint256[] memory nftAmounts
+	) external payable chargeAppFee requireSameLength(nftAddresses, nftIds, nftAmounts) {
+		require(_swaps[swapId].secondUser == msg.sender, "SwapKiwi: caller is not swap participator");
+		require(
+			_swaps[swapId].secondUserEtherValue == 0 &&
+			( _swaps[swapId].secondUserNftAddresses.length == 0 &&
+			_swaps[swapId].secondUserNftIds.length == 0 &&
+			_swaps[swapId].secondUserNftAmounts.length == 0
+			), "SwapKiwi: swap already initiated"
+		);
 
-      safeMultipleTransfersFrom(
-        msg.sender,
-        address(this),
-        nftAddresses,
-        nftIds
-    );
+		safeMultipleTransfersFrom(
+			msg.sender,
+			address(this),
+			nftAddresses,
+			nftIds,
+			nftAmounts
+		);
 
-      _swaps[swapId].secondUserNftAddresses = nftAddresses;
-      _swaps[swapId].secondUserNftIds = nftIds;
-      if (msg.value > fee) {
-        _swaps[swapId].secondUserEtherValue = msg.value - fee;
-        _etherLocked += _swaps[swapId].secondUserEtherValue;
-      }
+		_swaps[swapId].secondUserNftAddresses = nftAddresses;
+		_swaps[swapId].secondUserNftIds = nftIds;
+		_swaps[swapId].secondUserNftAmounts = nftAmounts;
 
-      emit SwapInitiated(
-        msg.sender,
-        _swaps[swapId].initiator,
-        swapId,
-        nftAddresses,
-        nftIds,
-        _swaps[swapId].secondUserEtherValue
-      );
-  }
+		uint128 _fee = fee;
 
-  /**
-    * @dev Swap initiator accepts the swap (NFTs proposed by the second user).
-    *      Executeds the swap - transfers NFTs from SwapKiwi to the participating users.
-    *      Callable only by swap initiator.
-    *
-    * @param swapId ID of the swap that the initator wants to execute
-    */
-  function acceptSwap(uint256 swapId) external onlyInitiator(swapId) {
-    require(
-      (_swaps[swapId].secondUserNftAddresses.length != 0 || _swaps[swapId].secondUserEtherValue > 0) &&
-      (_swaps[swapId].initiatorNftAddresses.length != 0 || _swaps[swapId].initiatorEtherValue > 0),
-       "SwapKiwi: Can't accept swap, both participants didn't add NFTs"
-    );
+		if (msg.value > _fee) {
+			_swaps[swapId].secondUserEtherValue = uint128(msg.value) - _fee;
+			_etherLocked += _swaps[swapId].secondUserEtherValue;
+		}
 
-    // transfer NFTs from escrow to initiator
-    safeMultipleTransfersFrom(
-      address(this),
-      _swaps[swapId].initiator,
-      _swaps[swapId].secondUserNftAddresses,
-      _swaps[swapId].secondUserNftIds
-    );
+		emit SwapInitiated(
+			msg.sender,
+			_swaps[swapId].initiator,
+			swapId,
+			_swaps[swapId].secondUserEtherValue,
+			nftAddresses,
+			nftIds,
+			nftAmounts
+		);
+	}
 
-    // transfer NFTs from escrow to second user
-    safeMultipleTransfersFrom(
-      address(this),
-      _swaps[swapId].secondUser,
-      _swaps[swapId].initiatorNftAddresses,
-      _swaps[swapId].initiatorNftIds
-    );
+	/**
+	* @dev Swap initiator accepts the swap (NFTs proposed by the second user).
+	*      Executeds the swap - transfers NFTs from SwapKiwi to the participating users.
+	*      Callable only by swap initiator.
+	*
+	* @param swapId ID of the swap that the initator wants to execute
+	*/
+	function acceptSwap(uint64 swapId) external onlyInitiator(swapId) {
+		require(
+			(_swaps[swapId].secondUserNftAddresses.length != 0 || _swaps[swapId].secondUserEtherValue > 0) &&
+			(_swaps[swapId].initiatorNftAddresses.length != 0 || _swaps[swapId].initiatorEtherValue > 0),
+			"SwapKiwi: Can't accept swap, both participants didn't add NFTs"
+		);
 
-    if (_swaps[swapId].initiatorEtherValue != 0) {
-      _etherLocked -= _swaps[swapId].initiatorEtherValue;
-      uint amountToTransfer = _swaps[swapId].initiatorEtherValue;
-      _swaps[swapId].initiatorEtherValue = 0;
-      _swaps[swapId].secondUser.transfer(amountToTransfer);
-    }
-    if (_swaps[swapId].secondUserEtherValue != 0) {
-      _etherLocked -= _swaps[swapId].secondUserEtherValue;
-      uint amountToTransfer = _swaps[swapId].secondUserEtherValue;
-      _swaps[swapId].secondUserEtherValue = 0;
-      _swaps[swapId].initiator.transfer(amountToTransfer);
-    }
+		// transfer NFTs from escrow to initiator
+		safeMultipleTransfersFrom(
+			address(this),
+			_swaps[swapId].initiator,
+			_swaps[swapId].secondUserNftAddresses,
+			_swaps[swapId].secondUserNftIds,
+			_swaps[swapId].secondUserNftAmounts
+		);
 
-    emit SwapExecuted(_swaps[swapId].initiator, _swaps[swapId].secondUser, swapId);
+		// transfer NFTs from escrow to second user
+		safeMultipleTransfersFrom(
+			address(this),
+			_swaps[swapId].secondUser,
+			_swaps[swapId].initiatorNftAddresses,
+			_swaps[swapId].initiatorNftIds,
+			_swaps[swapId].initiatorNftAmounts
+		);
 
-    delete _swaps[swapId];
-  }
+		if (_swaps[swapId].initiatorEtherValue != 0) {
+			_etherLocked -= _swaps[swapId].initiatorEtherValue;
+			uint128 amountToTransfer = _swaps[swapId].initiatorEtherValue;
+			_swaps[swapId].initiatorEtherValue = 0;
+			_swaps[swapId].secondUser.transfer(amountToTransfer);
+		}
+		if (_swaps[swapId].secondUserEtherValue != 0) {
+			_etherLocked -= _swaps[swapId].secondUserEtherValue;
+			uint128 amountToTransfer = _swaps[swapId].secondUserEtherValue;
+			_swaps[swapId].secondUserEtherValue = 0;
+			_swaps[swapId].initiator.transfer(amountToTransfer);
+		}
 
-  /**
-    * @dev Returns NFTs from SwapKiwi to swap initator.
-    *      Callable only if second user hasn't yet added NFTs.
-    *
-    * @param swapId ID of the swap that the swap participants want to cancel
-    */
-  function cancelSwap(uint256 swapId) external {
-    require(
-      _swaps[swapId].initiator == msg.sender || _swaps[swapId].secondUser == msg.sender,
-      "SwapKiwi: Can't cancel swap, must be swap participant"
-    );
-      // return initiator NFTs
-      safeMultipleTransfersFrom(
-        address(this),
-        _swaps[swapId].initiator,
-        _swaps[swapId].initiatorNftAddresses,
-        _swaps[swapId].initiatorNftIds
-      );
+		emit SwapExecuted(_swaps[swapId].initiator, _swaps[swapId].secondUser, swapId);
 
-    if(_swaps[swapId].secondUserNftAddresses.length != 0) {
-      // return second user NFTs
-      safeMultipleTransfersFrom(
-        address(this),
-        _swaps[swapId].secondUser,
-        _swaps[swapId].secondUserNftAddresses,
-        _swaps[swapId].secondUserNftIds
-      );
-    }
+		delete _swaps[swapId];
+	}
 
-    if (_swaps[swapId].initiatorEtherValue != 0) {
-      _etherLocked -= _swaps[swapId].initiatorEtherValue;
-      uint amountToTransfer = _swaps[swapId].initiatorEtherValue;
-      _swaps[swapId].initiatorEtherValue = 0;
-      _swaps[swapId].initiator.transfer(amountToTransfer);
-    }
-    if (_swaps[swapId].secondUserEtherValue != 0) {
-      _etherLocked -= _swaps[swapId].secondUserEtherValue;
-      uint amountToTransfer = _swaps[swapId].secondUserEtherValue;
-      _swaps[swapId].secondUserEtherValue = 0;
-      _swaps[swapId].secondUser.transfer(amountToTransfer);
-    }
+	/**
+	* @dev Returns NFTs from SwapKiwi to swap initator.
+	*      Callable only if second user hasn't yet added NFTs.
+	*
+	* @param swapId ID of the swap that the swap participants want to cancel
+	*/
+	function cancelSwap(uint64 swapId) external {
+		require(
+			_swaps[swapId].initiator == msg.sender || _swaps[swapId].secondUser == msg.sender,
+			"SwapKiwi: Can't cancel swap, must be swap participant"
+		);
+		// return initiator NFTs
+		safeMultipleTransfersFrom(
+			address(this),
+			_swaps[swapId].initiator,
+			_swaps[swapId].initiatorNftAddresses,
+			_swaps[swapId].initiatorNftIds,
+			_swaps[swapId].initiatorNftAmounts
+		);
 
-    emit SwapCanceled(msg.sender, swapId);
+		if(_swaps[swapId].secondUserNftAddresses.length != 0) {
+			// return second user NFTs
+			safeMultipleTransfersFrom(
+				address(this),
+				_swaps[swapId].secondUser,
+				_swaps[swapId].secondUserNftAddresses,
+				_swaps[swapId].secondUserNftIds,
+				_swaps[swapId].secondUserNftAmounts
+			);
+		}
 
-    delete _swaps[swapId];
-  }
+		if (_swaps[swapId].initiatorEtherValue != 0) {
+			_etherLocked -= _swaps[swapId].initiatorEtherValue;
+			uint128 amountToTransfer = _swaps[swapId].initiatorEtherValue;
+			_swaps[swapId].initiatorEtherValue = 0;
+			_swaps[swapId].initiator.transfer(amountToTransfer);
+		}
+		if (_swaps[swapId].secondUserEtherValue != 0) {
+			_etherLocked -= _swaps[swapId].secondUserEtherValue;
+			uint128 amountToTransfer = _swaps[swapId].secondUserEtherValue;
+			_swaps[swapId].secondUserEtherValue = 0;
+			_swaps[swapId].secondUser.transfer(amountToTransfer);
+		}
 
-  function safeMultipleTransfersFrom(
-      address from,
-      address to,
-      address[] memory nftAddresses,
-      uint256[] memory nftIds
-    ) internal virtual {
-    for (uint256 i=0; i < nftIds.length; i++){
-      safeTransferFrom(from, to, nftAddresses[i], nftIds[i], "");
-    }
-  }
+		emit SwapCanceled(msg.sender, swapId);
 
-  function safeTransferFrom(
-      address from,
-      address to,
-      address tokenAddress,
-      uint256 tokenId,
-      bytes memory _data
-    ) internal virtual {
-    IERC721(tokenAddress).safeTransferFrom(from, to, tokenId, _data);
-  }
+		delete _swaps[swapId];
+	}
 
-  function withdrawEther(address payable recipient) external onlyOwner {
-    require(recipient != address(0), "SwapKiwi: transfer to the zero address");
+	function safeMultipleTransfersFrom(
+		address from,
+		address to,
+		address[] memory nftAddresses,
+		uint256[] memory nftIds,
+		uint256[] memory nftAmounts
+	) internal virtual {
+		for (uint256 i=0; i < nftIds.length; i++){
+			safeTransferFrom(from, to, nftAddresses[i], nftIds[i], nftAmounts[i], "");
+		}
+	}
 
-    recipient.transfer((address(this).balance - _etherLocked));
-  }
+	function safeTransferFrom(
+		address from,
+		address to,
+		address tokenAddress,
+		uint256 tokenId,
+		uint256 tokenAmount,
+		bytes memory _data
+	) internal virtual {
+		if (tokenAmount == 0) {
+			IERC721(tokenAddress).safeTransferFrom(from, to, tokenId, _data);
+		} else {
+			IERC1155(tokenAddress).safeTransferFrom(from, to, tokenId, tokenAmount, _data);
+		}
+		
+	}
 
-  function onERC721Received(
-    /* solhint-disable */
-      address operator,
-      address from,
-      uint256 tokenId,
-      bytes calldata data
-    /* solhint-enable */
-    ) external pure override returns (bytes4) {
-      return bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"));
-  }
+	function withdrawEther(address payable recipient) external onlyOwner {
+		require(recipient != address(0), "SwapKiwi: transfer to the zero address");
+
+		recipient.transfer((address(this).balance - _etherLocked));
+	}
 }
