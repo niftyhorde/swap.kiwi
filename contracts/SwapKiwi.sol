@@ -146,7 +146,7 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
   * @dev Second user accepts the swap (with proposed NFTs) from swap initiator and
   *      deposits his NFTs into the SwapKiwi contract.
   *      Callable only by second user that is invited by swap initiator.
-  *      Even though the second user didn't provide any NFT and value equal to the fee, it's executed.
+  *      Even if the second user didn't provide any NFT and ether value equals to fee, it is considered valid.
   *
   * @param swapId ID of the swap that the second user is invited to participate in
   * @param nftAddresses array of NFT addressed that want to be traded
@@ -293,15 +293,13 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
 
     if (swap.initiatorEtherValue != 0) {
       _etherLocked -= swap.initiatorEtherValue;
-      uint128 amountToTransfer = swap.initiatorEtherValue;
-      swap.initiatorEtherValue = 0;
-      swap.initiator.transfer(amountToTransfer);
+      (bool success,) = swap.initiator.call{value: swap.initiatorEtherValue}("");
+      require(success, "Failed to send Ether to the initiator user");
     }
     if (swap.secondUserEtherValue != 0) {
       _etherLocked -= swap.secondUserEtherValue;
-      uint128 amountToTransfer = swap.secondUserEtherValue;
-      swap.secondUserEtherValue = 0;
-      swap.secondUser.transfer(amountToTransfer);
+      (bool success,) = swap.secondUser.call{value: swap.secondUserEtherValue}("");
+      require(success, "Failed to send Ether to the secondUser user");
     }
 
     emit SwapCanceled(msg.sender, swapId);
