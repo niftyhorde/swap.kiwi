@@ -299,7 +299,7 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
     if (swap.secondUserEtherValue != 0) {
       _etherLocked -= swap.secondUserEtherValue;
       (bool success,) = swap.secondUser.call{value: swap.secondUserEtherValue}("");
-      require(success, "Failed to send Ether to the secondUser user");
+      require(success, "Failed to send Ether to the second user");
     }
 
     emit SwapCanceled(msg.sender, swapId);
