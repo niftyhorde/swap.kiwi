@@ -1,6 +1,6 @@
 {
   "name": "@niftyhorde/swap-kiwi-contracts",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0",
   "private": false,
   "repository": {
     "url": "git@github.com:niftyhorde/swap.kiwi.git",
