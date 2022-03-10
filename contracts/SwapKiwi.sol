@@ -326,7 +326,7 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
     bytes memory _data
   ) internal virtual {
     if (tokenAmount == 0) {
-      IERC721(tokenAddress).safeTransferFrom(from, to, tokenId, _data);
+      IERC721(tokenAddress).transferFrom(from, to, tokenId);
     } else {
       IERC1155(tokenAddress).safeTransferFrom(from, to, tokenId, tokenAmount, _data);
     }
