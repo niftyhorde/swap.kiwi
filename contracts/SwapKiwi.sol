@@ -18,6 +18,8 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
   uint96 private _etherLocked;
   uint96 public fee;
 
+  address private constant _ZEROADDRESS = address(0);
+
   mapping (uint64 => Swap) private _swaps;
 
   struct Swap {
@@ -35,6 +37,8 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
 
   event SwapExecuted(address indexed from, address indexed to, uint64 indexed swapId);
   event SwapCanceled(address indexed canceledBy, uint64 indexed swapId);
+  event SingleSideCanceledByInitiator(uint64 indexed swapId);
+  event SwapCanceledBySecondUser(uint64 indexed swapId);
   event SwapProposed(
     address indexed from,
     address indexed to,
@@ -60,6 +64,12 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
   modifier onlyInitiator(uint64 swapId) {
     require(msg.sender == _swaps[swapId].initiator,
       "SwapKiwi: caller is not swap initiator");
+    _;
+  }
+
+  modifier onlySecondUser(uint64 swapId) {
+    require(msg.sender == _swaps[swapId].secondUser,
+      "SwapKiwi: caller is not swap secondUser");
     _;
   }
 
@@ -212,6 +222,7 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
     Swap memory swap = _swaps[swapId];
     delete _swaps[swapId];
 
+    require(swap.secondUser != _ZEROADDRESS, "Invalid second user");
     require(
       (swap.secondUserNftAddresses.length > 0 || swap.secondUserEtherValue > 0) &&
       (swap.initiatorNftAddresses.length > 0 || swap.initiatorEtherValue > 0),
@@ -269,6 +280,8 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
       "SwapKiwi: Can't cancel swap, must be swap participant"
     );
 
+    require(swap.initiator != _ZEROADDRESS && swap.secondUser != _ZEROADDRESS, "One of participants is zero address");
+
     if(swap.initiatorNftAddresses.length > 0) {
       // return initiator NFTs
       safeMultipleTransfersFrom(
@@ -303,6 +316,56 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
     }
 
     emit SwapCanceled(msg.sender, swapId);
+  }
+
+  function cancelSwapByInitiator(uint64 swapId) external onlyInitiator(swapId) {
+    Swap storage swap = _swaps[swapId];
+
+    if(swap.initiatorNftAddresses.length > 0) {
+      // return initiator NFTs
+      safeMultipleTransfersFrom(
+        address(this),
+        swap.initiator,
+        swap.initiatorNftAddresses,
+        swap.initiatorNftIds,
+        swap.initiatorNftAmounts
+      );
+    }
+
+    if (swap.initiatorEtherValue != 0) {
+      _etherLocked -= swap.initiatorEtherValue;
+      (bool success,) = swap.initiator.call{value: swap.initiatorEtherValue}("");
+      require(success, "Failed to send Ether to the initiator user");
+    }
+
+    swap.initiator = payable(_ZEROADDRESS);
+
+    emit SingleSideCanceledByInitiator(swapId);
+  }
+
+  function cancelSwapBySecondUser(uint64 swapId) external onlySecondUser(swapId) {
+    Swap storage swap = _swaps[swapId];
+
+    if(swap.secondUserNftAddresses.length > 0) {
+      // return second user NFTs
+      safeMultipleTransfersFrom(
+        address(this),
+        swap.secondUser,
+        swap.secondUserNftAddresses,
+        swap.secondUserNftIds,
+        swap.secondUserNftAmounts
+      );
+    }
+
+    if (swap.secondUserEtherValue != 0) {
+      _etherLocked -= swap.secondUserEtherValue;
+      (bool success,) = swap.secondUser.call{value: swap.secondUserEtherValue}("");
+      require(success, "Failed to send Ether to the second user");
+    }
+
+    swap.secondUser = payable(_ZEROADDRESS);
+
+    emit SwapCanceledBySecondUser(swapId);
   }
 
   function safeMultipleTransfersFrom(
