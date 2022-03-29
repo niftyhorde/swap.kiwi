@@ -321,8 +321,10 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
 
     if (swap.secondUserEtherValue != 0 && swap.secondUser != _ZEROADDRESS) {
       _etherLocked -= swap.secondUserEtherValue;
+      _swaps[swapId].secondUser = payable(_ZEROADDRESS);
       (bool success,) = swap.secondUser.call{value: swap.secondUserEtherValue}("");
       if (!success) {
+        _swaps[swapId].secondUser = swap.secondUser;
         delete _swaps[swapId].secondUserNftAddresses;
         emit TransferEthToSecondUserFailed(swapId);
         return true;
@@ -336,12 +338,13 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
 
   function cancelSwapBySecondUser(uint64 swapId) external onlySecondUser(swapId) {
     Swap storage swap = _swaps[swapId];
+    address payable _secondUser = swap.secondUser;
 
     if(swap.secondUserNftAddresses.length > 0) {
       // return second user NFTs
       this.safeMultipleTransfersFrom(
         address(this),
-        swap.secondUser,
+        _secondUser,
         swap.secondUserNftAddresses,
         swap.secondUserNftIds,
         swap.secondUserNftAmounts
@@ -350,14 +353,13 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
 
     if (swap.secondUserEtherValue != 0) {
       _etherLocked -= swap.secondUserEtherValue;
-      (bool success,) = swap.secondUser.call{value: swap.secondUserEtherValue}("");
+      swap.secondUser = payable(_ZEROADDRESS);
+      (bool success,) = _secondUser.call{value: swap.secondUserEtherValue}("");
       require(success, "Failed to send Ether to the second user");
     }
 
     if (swap.initiator == _ZEROADDRESS) {
       delete _swaps[swapId];
-    } else {
-      swap.secondUser = payable(_ZEROADDRESS);
     }
 
     emit SwapCanceledBySecondUser(swapId);
