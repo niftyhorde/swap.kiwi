@@ -339,6 +339,7 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
   function cancelSwapBySecondUser(uint64 swapId) external onlySecondUser(swapId) {
     Swap storage swap = _swaps[swapId];
     address payable _secondUser = swap.secondUser;
+    swap.secondUser = payable(_ZEROADDRESS);
 
     if(swap.secondUserNftAddresses.length > 0) {
       // return second user NFTs
@@ -353,7 +354,6 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
 
     if (swap.secondUserEtherValue != 0) {
       _etherLocked -= swap.secondUserEtherValue;
-      swap.secondUser = payable(_ZEROADDRESS);
       (bool success,) = _secondUser.call{value: swap.secondUserEtherValue}("");
       require(success, "Failed to send Ether to the second user");
     }
