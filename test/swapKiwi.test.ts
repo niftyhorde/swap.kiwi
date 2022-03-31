@@ -1054,6 +1054,42 @@ describe("SwapKiwi", async function () {
     expect(secondUserBalance.sub(await secondUserParticipant.signer.getBalance()).lt(parseEther("1"))).to.be.equal(true);
 
     await expect(appUser.acceptSwap(swapIdFromLogs))
-      .to.be.rejectedWith("Invalid second user");
+      .to.be.rejectedWith("SwapKiwi: Can't accept swap, both participants didn't add NFTs");
+  });
+
+  it("etherLocked amount should not be changed if eth transfer to the second user is failed when common cancel", async function () {
+    const tokenIds = [18827, 18828];
+    const tokenAmounts = [10, 20];
+
+    const secondUserBalance = await secondUserParticipant.signer.getBalance();
+
+    await appUserERC1155.mint(appUserAddress, tokenIds[0], tokenAmounts[0]);
+    await otherAppUserERC1155.mint(secondUserParticipant.address, tokenIds[1], tokenAmounts[1]);
+
+    await appUserERC1155.setApprovalForAll(swapKiwi.address, true);
+    await secondUserParticipant.setSwap(swapKiwi.address);
+
+    const tx = await appUser.proposeSwap(secondUserParticipant.address, [appUserERC1155.address], [tokenIds[0]], [tokenAmounts[0]], {
+      value: VALID_APP_FEE
+    });
+    const txReceipt = await tx.wait(1);
+    const logs = await getEventWithArgsFromLogs(txReceipt, "SwapProposed");
+    const swapIdFromLogs = Number(logs.args.swapId.toString());
+
+    await secondUserParticipant.initiateSwap(swapIdFromLogs, [otherAppUserERC1155.address], [tokenIds[1]], [tokenAmounts[1]], {
+      value: VALID_APP_FEE.add(parseEther("50"))
+    });
+
+    const locked = await appUser.etherLocked();
+
+    await secondUserParticipant.setCounter2(10);
+    await appUser.cancelSwap(swapIdFromLogs);
+
+    const lockedAfterFailed = await appUser.etherLocked();
+
+    expect(lockedAfterFailed.toString()).to.be.deep.equal(locked.toString());
+    const secondUser_erc1155BalanceAfterCancel = await otherAppUserERC1155.balanceOf(secondUserParticipant.address, tokenIds[1]);
+    expect(secondUser_erc1155BalanceAfterCancel.toNumber()).to.be.deep.equal(tokenAmounts[1]);
+    expect(secondUserBalance.sub(await secondUserParticipant.signer.getBalance()).gt(parseEther("50"))).to.be.equal(true);
   });
 });

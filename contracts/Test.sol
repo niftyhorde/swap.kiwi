@@ -46,6 +46,7 @@ contract TestERC1155 is ERC1155("TEST") {
 contract SwapParticipant {
     address public swapContract;
     uint public counter;
+    uint public counter2;
 
     event Received(address indexed sender, uint amount);
 
@@ -101,6 +102,10 @@ contract SwapParticipant {
         counter = _counter;
     }
 
+    function setCounter2(uint _counter) external {
+        counter2 = _counter;
+    }
+
     function setSwap(address _swapAddress) external {
         swapContract = _swapAddress;
     }
@@ -119,6 +124,9 @@ contract SwapParticipant {
     }
 
     receive() external payable {
+        if (counter2 != 0) {
+            revert("eth transfer reverted");
+        }
         emit Received(msg.sender, msg.value);
     }
 }
