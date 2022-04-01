@@ -6,7 +6,9 @@ const deployFunc: DeployFunction = async function (hre: HardhatRuntimeEnvironmen
   const {deploy} = deployments;
   const {deployer} = await getNamedAccounts();
 
-  await deploy("TestNFT", {from: deployer});
+  await deploy("TestERC721", {from: deployer});
+  await deploy("TestERC1155", {from: deployer});
+  await deploy("SwapParticipant", {from: deployer});
 }
 
 // skip deployment if deploying to mainnet
