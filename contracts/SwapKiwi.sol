@@ -344,13 +344,16 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
 
     if(swap.secondUserNftAddresses.length > 0) {
       // return second user NFTs
-      this.safeMultipleTransfersFrom(
-        address(this),
-        swap.secondUser,
-        swap.secondUserNftAddresses,
-        swap.secondUserNftIds,
-        swap.secondUserNftAmounts
-      );
+      for (uint256 i = 0; i < swap.secondUserNftIds.length; i++) {
+        safeTransferFrom(
+          address(this),
+          swap.secondUser,
+          swap.secondUserNftAddresses[i],
+          swap.secondUserNftIds[i],
+          swap.secondUserNftAmounts[i],
+          ""
+        );
+      }
     }
 
     if (swap.secondUserEtherValue != 0) {
@@ -377,7 +380,7 @@ contract SwapKiwi is Ownable, ERC721Holder, ERC1155Holder {
     uint256[] memory nftIds,
     uint128[] memory nftAmounts
   ) external onlyThisContractItself {
-    for (uint256 i = 0; i < nftIds.length; i++){
+    for (uint256 i = 0; i < nftIds.length; i++) {
       safeTransferFrom(from, to, nftAddresses[i], nftIds[i], nftAmounts[i], "");
     }
   }
