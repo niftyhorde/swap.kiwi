@@ -4,6 +4,7 @@ import { ethers, deployments } from "hardhat";
 import { SwapKiwi } from "../typechain/SwapKiwi";
 import { TestERC721 } from "../typechain/TestERC721";
 import { TestERC1155 } from "../typechain/TestERC1155";
+import { SwapParticipant } from "../typechain/SwapParticipant";
 import { Signer } from "ethers";
 import { TransactionReceipt } from "@ethersproject/providers";
 import chaiAsPromised from 'chai-as-promised';
@@ -20,6 +21,9 @@ describe("SwapKiwi", async function () {
   let TestERC1155: Deployment;
   let appUserERC1155: TestERC1155;
   let otherAppUserERC1155: TestERC1155;
+  let SwapParticipant: Deployment;
+  let initiatorParticipant: SwapParticipant;
+  let secondUserParticipant: SwapParticipant;
   let signers: Signer[];
   let appUser: SwapKiwi;
   let otherAppUser: SwapKiwi;
@@ -29,7 +33,7 @@ describe("SwapKiwi", async function () {
 
   before(async () => {
     signers = await ethers.getSigners();
-    ({ SwapKiwi, TestERC721, TestERC1155 } = await deployments.fixture());
+    ({ SwapKiwi, TestERC721, TestERC1155, SwapParticipant } = await deployments.fixture());
 
     swapKiwi = await ethers.getContractAt(SwapKiwi.abi, SwapKiwi.address, signers[0]) as SwapKiwi;
 
@@ -38,6 +42,9 @@ describe("SwapKiwi", async function () {
 
     appUserERC1155 = await ethers.getContractAt(TestERC1155.abi, TestERC1155.address, signers[2]) as TestERC1155;
     otherAppUserERC1155 = await ethers.getContractAt(TestERC1155.abi, TestERC1155.address, signers[3]) as TestERC1155;
+
+    initiatorParticipant = await ethers.getContractAt(SwapParticipant.abi, SwapParticipant.address, signers[2]) as SwapParticipant;
+    secondUserParticipant = await ethers.getContractAt(SwapParticipant.abi, SwapParticipant.address, signers[3]) as SwapParticipant;
 
     appUser = new ethers.Contract(swapKiwi.address, SwapKiwi.abi, signers[2]) as SwapKiwi;
     otherAppUser = new ethers.Contract(swapKiwi.address, SwapKiwi.abi, signers[3]) as SwapKiwi;
@@ -906,5 +913,183 @@ describe("SwapKiwi", async function () {
   it("Should fail to withdraw collected fees if sent to zero address", async function () {
     await expect(swapKiwi.withdrawEther("0x0000000000000000000000000000000000000000"))
       .to.be.rejectedWith("SwapKiwi: transfer to the zero address");
+  });
+
+  it("The initiator should get their parts even if the common cancelling(part) is failed. And then the second user can get its part through a single side cancel", async function () {
+    const tokenIds = [1827, 1828];
+    const tokenAmounts = [10, 20];
+
+    const secondUserBalance = await secondUserParticipant.signer.getBalance();
+
+    await appUserERC1155.mint(appUserAddress, tokenIds[0], tokenAmounts[0]);
+    await otherAppUserERC1155.mint(secondUserParticipant.address, tokenIds[1], tokenAmounts[1]);
+
+    await appUserERC1155.setApprovalForAll(swapKiwi.address, true);
+    await secondUserParticipant.setSwap(swapKiwi.address);
+
+    const tx = await appUser.proposeSwap(secondUserParticipant.address, [appUserERC1155.address], [tokenIds[0]], [tokenAmounts[0]], {
+      value: VALID_APP_FEE
+    });
+    const txReceipt = await tx.wait(1);
+    const logs = await getEventWithArgsFromLogs(txReceipt, "SwapProposed");
+    const swapIdFromLogs = Number(logs.args.swapId.toString());
+
+    await secondUserParticipant.initiateSwap(swapIdFromLogs, [otherAppUserERC1155.address], [tokenIds[1]], [tokenAmounts[1]], {
+      value: VALID_APP_FEE.add(parseEther("50"))
+    });
+
+    await secondUserParticipant.setCounter(10);
+
+    await appUser.cancelSwap(swapIdFromLogs);
+
+    const initiator_erc1155BalanceAfterCancel = await appUserERC1155.balanceOf(appUserAddress, tokenIds[0]);
+    // check that ERC721 and ERC1155 are returned to initial owner
+    expect(initiator_erc1155BalanceAfterCancel.toNumber()).to.be.deep.equal(tokenAmounts[0]);
+  
+    await secondUserParticipant.setCounter(0);
+    await secondUserParticipant.cancelSwapBySecondUser(swapIdFromLogs);
+    const secondUser_erc1155BalanceAfterCancel = await otherAppUserERC1155.balanceOf(secondUserParticipant.address, tokenIds[1]);
+    expect(secondUser_erc1155BalanceAfterCancel.toNumber()).to.be.deep.equal(tokenAmounts[1]);
+    expect(secondUserBalance.sub(await secondUserParticipant.signer.getBalance()).lt(parseEther("1"))).to.be.equal(true);
+  });
+
+  it("The initiator should get their part even if the common cancelling(full) is failed. And then the second user can get its part through a single side cancel", async function () {
+    const tokenIds = [11827, 11828];
+    const tokenAmounts = [10, 20];
+
+    const secondUserBalance = await secondUserParticipant.signer.getBalance();
+
+    await appUserERC1155.mint(initiatorParticipant.address, tokenIds[0], tokenAmounts[0]);
+    await otherAppUserERC1155.mint(secondUserParticipant.address, tokenIds[1], tokenAmounts[1]);
+
+    await initiatorParticipant.setSwap(swapKiwi.address);
+    await secondUserParticipant.setSwap(swapKiwi.address);
+
+    const tx = await initiatorParticipant.proposeSwap(secondUserParticipant.address, [appUserERC1155.address], [tokenIds[0]], [tokenAmounts[0]], {
+      value: VALID_APP_FEE
+    });
+    const txReceipt = await tx.wait(1);
+    const logs = await getEventWithArgsFromLogs(txReceipt, "SwapProposed");
+    const swapIdFromLogs = Number(logs.args.swapId.toString());
+
+    await secondUserParticipant.initiateSwap(swapIdFromLogs, [otherAppUserERC1155.address], [tokenIds[1]], [tokenAmounts[1]], {
+      value: VALID_APP_FEE.add(parseEther("50"))
+    });
+
+    await initiatorParticipant.setCounter(10);
+    await expect(initiatorParticipant.cancelSwap(swapIdFromLogs))
+      .to.be.rejectedWith("The malicious onERC1155Received contract");
+
+    const initiator_erc1155BalanceAfterCancel = await appUserERC1155.balanceOf(initiatorParticipant.address, tokenIds[0]);
+    // check that ERC721 and ERC1155 are returned to initial owner
+    expect(initiator_erc1155BalanceAfterCancel.toNumber()).to.be.deep.equal(0);
+  
+    await secondUserParticipant.setCounter(0);
+    await secondUserParticipant.cancelSwapBySecondUser(swapIdFromLogs);
+    const secondUser_erc1155BalanceAfterCancel = await otherAppUserERC1155.balanceOf(secondUserParticipant.address, tokenIds[1]);
+    expect(secondUser_erc1155BalanceAfterCancel.toNumber()).to.be.deep.equal(tokenAmounts[1]);
+    expect(secondUserBalance.sub(await secondUserParticipant.signer.getBalance()).lt(parseEther("1"))).to.be.equal(true);
+  });
+
+  it("The second user can get its part through a single side cancel. After that, the initiator can get its part through the common cancel", async function () {
+    const tokenIds = [1227, 1228];
+    const tokenAmounts = [10, 20];
+
+    const secondUserBalance = await secondUserParticipant.signer.getBalance();
+
+    await appUserERC1155.mint(appUserAddress, tokenIds[0], tokenAmounts[0]);
+    await otherAppUserERC1155.mint(secondUserParticipant.address, tokenIds[1], tokenAmounts[1]);
+
+    await appUserERC1155.setApprovalForAll(swapKiwi.address, true);
+    await secondUserParticipant.setSwap(swapKiwi.address);
+
+    const tx = await appUser.proposeSwap(secondUserParticipant.address, [appUserERC1155.address], [tokenIds[0]], [tokenAmounts[0]], {
+      value: VALID_APP_FEE
+    });
+    const txReceipt = await tx.wait(1);
+    const logs = await getEventWithArgsFromLogs(txReceipt, "SwapProposed");
+    const swapIdFromLogs = Number(logs.args.swapId.toString());
+
+    await secondUserParticipant.initiateSwap(swapIdFromLogs, [otherAppUserERC1155.address], [tokenIds[1]], [tokenAmounts[1]], {
+      value: VALID_APP_FEE.add(parseEther("50"))
+    });
+
+    await secondUserParticipant.cancelSwapBySecondUser(swapIdFromLogs);
+    const secondUser_erc1155BalanceAfterCancel = await otherAppUserERC1155.balanceOf(secondUserParticipant.address, tokenIds[1]);
+    expect(secondUser_erc1155BalanceAfterCancel.toNumber()).to.be.deep.equal(tokenAmounts[1]);
+    expect(secondUserBalance.sub(await secondUserParticipant.signer.getBalance()).lt(parseEther("1"))).to.be.equal(true);
+
+    await appUser.cancelSwap(swapIdFromLogs);
+    const initiator_erc1155BalanceAfterCancel = await appUserERC1155.balanceOf(appUserAddress, tokenIds[0]);
+    // check that ERC721 and ERC1155 are returned to initial owner
+    expect(initiator_erc1155BalanceAfterCancel.toNumber()).to.be.deep.equal(tokenAmounts[0]);
+  });
+
+  it("After the second user does a single side cancel, the swap should be failed", async function () {
+    const tokenIds = [1027, 1028];
+    const tokenAmounts = [10, 20];
+
+    const secondUserBalance = await secondUserParticipant.signer.getBalance();
+
+    await appUserERC1155.mint(appUserAddress, tokenIds[0], tokenAmounts[0]);
+    await otherAppUserERC1155.mint(secondUserParticipant.address, tokenIds[1], tokenAmounts[1]);
+
+    await appUserERC1155.setApprovalForAll(swapKiwi.address, true);
+    await secondUserParticipant.setSwap(swapKiwi.address);
+
+    const tx = await appUser.proposeSwap(secondUserParticipant.address, [appUserERC1155.address], [tokenIds[0]], [tokenAmounts[0]], {
+      value: VALID_APP_FEE
+    });
+    const txReceipt = await tx.wait(1);
+    const logs = await getEventWithArgsFromLogs(txReceipt, "SwapProposed");
+    const swapIdFromLogs = Number(logs.args.swapId.toString());
+
+    await secondUserParticipant.initiateSwap(swapIdFromLogs, [otherAppUserERC1155.address], [tokenIds[1]], [tokenAmounts[1]], {
+      value: VALID_APP_FEE.add(parseEther("50"))
+    });
+
+    await secondUserParticipant.cancelSwapBySecondUser(swapIdFromLogs);
+    const secondUser_erc1155BalanceAfterCancel = await otherAppUserERC1155.balanceOf(secondUserParticipant.address, tokenIds[1]);
+    expect(secondUser_erc1155BalanceAfterCancel.toNumber()).to.be.deep.equal(tokenAmounts[1]);
+    expect(secondUserBalance.sub(await secondUserParticipant.signer.getBalance()).lt(parseEther("1"))).to.be.equal(true);
+
+    await expect(appUser.acceptSwap(swapIdFromLogs))
+      .to.be.rejectedWith("SwapKiwi: Can't accept swap, both participants didn't add NFTs");
+  });
+
+  it("etherLocked amount should not be changed if eth transfer to the second user is failed when common cancel", async function () {
+    const tokenIds = [18827, 18828];
+    const tokenAmounts = [10, 20];
+
+    const secondUserBalance = await secondUserParticipant.signer.getBalance();
+
+    await appUserERC1155.mint(appUserAddress, tokenIds[0], tokenAmounts[0]);
+    await otherAppUserERC1155.mint(secondUserParticipant.address, tokenIds[1], tokenAmounts[1]);
+
+    await appUserERC1155.setApprovalForAll(swapKiwi.address, true);
+    await secondUserParticipant.setSwap(swapKiwi.address);
+
+    const tx = await appUser.proposeSwap(secondUserParticipant.address, [appUserERC1155.address], [tokenIds[0]], [tokenAmounts[0]], {
+      value: VALID_APP_FEE
+    });
+    const txReceipt = await tx.wait(1);
+    const logs = await getEventWithArgsFromLogs(txReceipt, "SwapProposed");
+    const swapIdFromLogs = Number(logs.args.swapId.toString());
+
+    await secondUserParticipant.initiateSwap(swapIdFromLogs, [otherAppUserERC1155.address], [tokenIds[1]], [tokenAmounts[1]], {
+      value: VALID_APP_FEE.add(parseEther("50"))
+    });
+
+    const locked = await appUser.etherLocked();
+
+    await secondUserParticipant.setCounter2(10);
+    await appUser.cancelSwap(swapIdFromLogs);
+
+    const lockedAfterFailed = await appUser.etherLocked();
+
+    expect(lockedAfterFailed.toString()).to.be.deep.equal(locked.toString());
+    const secondUser_erc1155BalanceAfterCancel = await otherAppUserERC1155.balanceOf(secondUserParticipant.address, tokenIds[1]);
+    expect(secondUser_erc1155BalanceAfterCancel.toNumber()).to.be.deep.equal(tokenAmounts[1]);
+    expect(secondUserBalance.sub(await secondUserParticipant.signer.getBalance()).gt(parseEther("50"))).to.be.equal(true);
   });
 });
