@@ -3,7 +3,7 @@ name: Release Contracts
 on:
   push:
     branches:
-      - 'master'
+      - "master"
 
 jobs:
   tag:
@@ -33,10 +33,10 @@ jobs:
       - name: Setup Nodejs
         uses: actions/setup-node@v1
         with:
-          node-version: '12.x'
+          node-version: "12.x"
           always-auth: true
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@niftyhorde'
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@niftyhorde"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Install dependencies
@@ -54,11 +54,11 @@ jobs:
 
       - name: Deploy local
         run: yarn run deploy:local
-      - name: Deploy ropsten
-        run: yarn run deploy:ropsten
+      - name: Deploy goerli
+        run: yarn run deploy:goerli
         env:
           INFURA_PROJECT_ID: ${{ secrets.INFURA_PROJECT_ID }}
-          ROPSTEN_MNEMONIC: ${{ secrets.TESTNET_MNEMONIC }}
+          GOERLI_MNEMONIC: ${{ secrets.TESTNET_MNEMONIC }}
       - name: Deploy rinkeby
         run: yarn run deploy:rinkeby
         env:

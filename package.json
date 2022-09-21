@@ -1,6 +1,6 @@
 {
   "name": "@niftyhorde/swap-kiwi-contracts",
-  "version": "1.0.1",
+  "version": "1.0.2-beta",
   "private": false,
   "repository": {
     "url": "git@github.com:niftyhorde/swap.kiwi.git",
@@ -30,7 +30,6 @@
     "deploy:localhost": "./wait-for-it.sh localhost:8545 -- sleep 1 && hardhat deploy --network localhost",
     "deploy:local": "concurrently --raw --kill-others --success first \"hardhat node\" \"yarn deploy:localhost\"",
     "deploy:goerli": "hardhat deploy --network goerli",
-    "deploy:ropsten": "hardhat deploy --network ropsten",
     "deploy:rinkeby": "hardhat deploy --network rinkeby",
     "deploy:mainnet": "hardhat deploy --network mainnet",
     "help": "npx hardhat help",
