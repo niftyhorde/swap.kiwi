@@ -3,7 +3,7 @@ import accounts from "./test/Accounts";
 import dotenv from "dotenv";
 
 import "@nomiclabs/hardhat-ethers";
-
+import "@nomiclabs/hardhat-etherscan";
 import "solidity-coverage";
 import "hardhat-gas-reporter";
 import "hardhat-deploy";
@@ -69,6 +69,9 @@ const config: HardhatUserConfig = {
         mnemonic: `${process.env.MAINNET_MNEMONIC}`,
       },
     },
+  },
+  etherscan: {
+    apiKey: process.env.ETHERSCAN_API_KEY,
   },
   gasReporter: {
     coinmarketcap: process.env.COINMARKETCAP_API_KEY,
